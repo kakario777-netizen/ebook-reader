@@ -28,7 +28,16 @@ jobs:
           gradle-version: 8.11.1
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee build.log
+        # 빌드가 실패하면 오류 줄만 골라 요약 표시(annotation)로 남긴다 — 채팅에서 원인을 바로 볼 수 있게
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E "^e: |error:|What went wrong|FAILURE|Unresolved|Exception" build.log | head -60 > errors.txt || true
+          msg=$(sed 's/%/%25/g' errors.txt | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=build-errors::${msg}"
 
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk ebook-reader.apk
