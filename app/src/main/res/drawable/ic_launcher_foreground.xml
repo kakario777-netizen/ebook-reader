@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 흰 바탕에 검은 선으로만 그린 펼친 책 (108dp 캔버스, 가운데 72dp가 안전 영역) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M54,42 L34,38 L34,70 L54,74 L74,70 L74,38 Z M54,42 L54,74" />
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M39,47 L49,49 M39,53 L49,55 M39,59 L49,61 M59,49 L69,47 M59,55 L69,53 M59,61 L69,59" />
+</vector>

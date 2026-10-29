@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 앱 전체가 순수 흰색 바탕. 회색·크림색 톤 없음. -->
+    <style name="Theme.EbookReader" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorBackground">@color/paper</item>
+    </style>
+</resources>
