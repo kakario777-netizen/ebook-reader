@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,7 +119,9 @@ fun TextReaderScreen(
     var downloaded by remember { mutableLongStateOf(-1L) }
     var retry by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(retry) {
+    // TXT는 '잘린 문장 잇기' 설정이 바뀌면 다시 읽는다
+    val reflowKey = if (entry.kind == BookKind.TXT) settings.txtReflow else null
+    LaunchedEffect(retry, reflowKey) {
         error = null
         var ftp: FtpBrowser? = null
         try {
@@ -132,14 +135,16 @@ fun TextReaderScreen(
                     TextContent.loadEpub(file)
                         ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
                 } else {
-                    TextContent.loadTxt(file)
+                    TextContent.loadTxt(file, settings.txtReflow)
                 }
             }
             if (c.sections.isEmpty()) {
                 c.close()
                 throw UserFacingException("이 책에는 읽을 글자가 없어요.")
             }
+            val old = content
             content = c
+            old?.close()
         } catch (e: CancellationException) {
             throw e
         } catch (e: UserFacingException) {
@@ -196,7 +201,7 @@ fun TextReaderScreen(
                 }
             }
 
-            else -> TextPages(
+            else -> key(c) { TextPages(
                 content = c,
                 origin = origin,
                 entry = entry,
@@ -208,7 +213,7 @@ fun TextReaderScreen(
                 onSettingsChange = onSettingsChange,
                 onOpenNext = onOpenNext,
                 onClose = onClose,
-            )
+            ) }
         }
     }
 }
@@ -280,7 +285,16 @@ private fun TextPages(
     }
 
     // 책 처음부터 센 글자 위치 — 글자 크기·화면 방향이 바뀌어도 이 위치에서 이어 읽는다
-    var position by remember { mutableIntStateOf(progress.get(bookKey).position.coerceIn(0, total - 1)) }
+    var position by remember {
+        val saved = progress.get(bookKey)
+        // 잘린 문장 잇기를 켜고 끄면 글자 수가 달라진다 → 같은 비율 위치로 옮긴다
+        val pos = if (saved.total > 0 && saved.total != total) {
+            (saved.position.toLong() * total / saved.total).toInt()
+        } else {
+            saved.position
+        }
+        mutableIntStateOf(pos.coerceIn(0, total - 1))
+    }
     var loc by remember { mutableStateOf<Loc?>(null) }
     var atEnd by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }

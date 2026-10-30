@@ -2,6 +2,9 @@ package com.kakario.ebookreader.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import com.kakario.ebookreader.book.Reflow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,6 +17,19 @@ import com.kakario.ebookreader.data.SettingsStore
 fun FontOptions(settings: AppSettings, onChange: (AppSettings) -> Unit) {
     val s = settings
     Column {
+        LineChoices(
+            label = "TXT 잘린 문장 잇기",
+            options = Reflow.Mode.entries,
+            selected = s.txtReflow,
+            text = { it.label },
+        ) { onChange(s.copy(txtReflow = it)) }
+        Text(
+            "줄마다 엔터로 끊어 둔 TXT를 알아보고 문장을 다시 이어요. 자동은 잘린 파일일 때만 이어요.",
+            color = Ink,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+        )
+
         LineChoices(
             label = "글꼴",
             options = ReaderFont.entries,

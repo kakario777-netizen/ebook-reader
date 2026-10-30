@@ -55,6 +55,9 @@ class TextContent(
 
     fun close() = onClose()
 
+    /** TXT에서 잘린 문장을 다시 이었는지 (메뉴에 표시). */
+    var reflowed: Boolean = false
+
     companion object {
         /** 한 구간의 대략적인 크기 (글자 수). 이보다 커지면 문단 경계에서 나눈다. */
         private const val CHUNK = 10_000
@@ -130,22 +133,13 @@ class TextContent(
             return out
         }
 
-        /** TXT 파일 → 내용. 줄 하나가 문단 하나. */
-        fun loadTxt(file: File): TextContent {
+        /** TXT 파일 → 내용. 줄 하나가 문단 하나 (잘린 문장은 reflow 설정에 따라 다시 잇는다). */
+        fun loadTxt(file: File, reflow: Reflow.Mode = Reflow.Mode.AUTO): TextContent {
             val text = TextDecode.decodeText(file.readBytes())
-            val blocks = ArrayList<Html.Block>()
-            var start = 0
-            val n = text.length
-            while (start <= n) {
-                var end = text.indexOf('\n', start)
-                if (end < 0) end = n
-                val line = text.substring(start, end).trimEnd('\r', ' ', '\t', '　')
-                    .replace('\t', ' ')
-                blocks += Html.Block.Para(line)
-                start = end + 1
-            }
+            val result = Reflow.process(text.split('\n'), reflow)
+            val blocks = result.paragraphs.map { Html.Block.Para(if (result.reflowed) it else it.trimEnd()) }
             val tidy = Html.tidy(blocks)
-            return build(file.nameWithoutExtension, listOf(tidy), images = { null })
+            return build(file.nameWithoutExtension, listOf(tidy), images = { null }).also { it.reflowed = result.reflowed }
         }
 
         /** EPUB 파일 → 내용. 그림은 열 때마다 파일에서 꺼낸다 (닫을 때 파일도 닫음). */

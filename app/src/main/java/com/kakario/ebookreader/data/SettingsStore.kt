@@ -1,6 +1,7 @@
 package com.kakario.ebookreader.data
 
 import android.content.Context
+import com.kakario.ebookreader.book.Reflow
 
 /** 만화(ZIP)를 열 때의 보기 방식. 회전도 이 값에 따라 강제로 맞춘다. */
 enum class ComicLayout(val label: String, val short: String) {
@@ -51,6 +52,8 @@ data class AppSettings(
     val indent: Int = 0,
     /** 양쪽 맞춤 (끄면 왼쪽 맞춤) */
     val justify: Boolean = true,
+    /** TXT 잘린 문장 다시 잇기 */
+    val txtReflow: Reflow.Mode = Reflow.Mode.AUTO,
     /** 여백 (dp) */
     val marginTop: Int = 28,
     val marginBottom: Int = 20,
@@ -107,6 +110,7 @@ class SettingsStore(context: Context) {
             letterSpacing = prefs.getInt("letter_spacing", d.letterSpacing).coerceIn(LETTER_MIN, LETTER_MAX),
             indent = prefs.getInt("indent", d.indent).coerceIn(0, INDENT_MAX),
             justify = prefs.getBoolean("justify", d.justify),
+            txtReflow = enumOf(prefs.getString("txt_reflow", null), d.txtReflow),
             marginTop = prefs.getInt("margin_top", d.marginTop).coerceIn(0, MARGIN_MAX),
             marginBottom = prefs.getInt("margin_bottom", d.marginBottom).coerceIn(0, MARGIN_MAX),
             marginLeft = prefs.getInt("margin_left", if (oldMargin >= 0) oldMargin else d.marginLeft).coerceIn(0, MARGIN_MAX),
@@ -143,6 +147,7 @@ class SettingsStore(context: Context) {
             .putInt("letter_spacing", s.letterSpacing)
             .putInt("indent", s.indent)
             .putBoolean("justify", s.justify)
+            .putString("txt_reflow", s.txtReflow.name)
             .putInt("margin_top", s.marginTop)
             .putInt("margin_bottom", s.marginBottom)
             .putInt("margin_left", s.marginLeft)
