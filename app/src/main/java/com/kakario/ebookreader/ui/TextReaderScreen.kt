@@ -7,6 +7,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -120,7 +123,7 @@ fun TextReaderScreen(
     var retry by remember { mutableIntStateOf(0) }
 
     // TXT는 '잘린 문장 잇기' 설정이 바뀌면 다시 읽는다
-    val reflowKey = if (entry.kind == BookKind.TXT) settings.txtReflow else null
+    val reflowKey = if (entry.kind == BookKind.TXT) "${settings.txtReflow}/${settings.txtChapters}" else null
     LaunchedEffect(retry, reflowKey) {
         error = null
         var ftp: FtpBrowser? = null
@@ -135,7 +138,7 @@ fun TextReaderScreen(
                     TextContent.loadEpub(file)
                         ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
                 } else {
-                    TextContent.loadTxt(file, settings.txtReflow)
+                    TextContent.loadTxt(file, settings.txtReflow, settings.txtChapters)
                 }
             }
             if (c.sections.isEmpty()) {
@@ -524,8 +527,21 @@ private fun TextPages(
         }
 
         if (overlay && !atEnd) {
+            val tocIndex = content.tocIndexAt(position)
             TextOverlay(
-                title = title,
+                title = content.toc.getOrNull(tocIndex)?.title ?: title,
+                bookTitle = if (tocIndex >= 0) title else null,
+                toc = content.toc,
+                tocIndex = tocIndex,
+                onToc = { i ->
+                    val pg = paginator
+                    val e = content.toc.getOrNull(i)
+                    if (pg != null && e != null) scope.launch {
+                        overlay = false
+                        goToPosition(pg, e.position)
+                        refresher?.now()
+                    }
+                },
                 fraction = position.toFloat() / total,
                 settings = settings,
                 onSettingsChange = onSettingsChange,
@@ -549,6 +565,10 @@ private fun TextPages(
 @Composable
 private fun TextOverlay(
     title: String,
+    bookTitle: String?,
+    toc: List<TextContent.TocEntry>,
+    tocIndex: Int,
+    onToc: (Int) -> Unit,
     fraction: Float,
     settings: AppSettings,
     onSettingsChange: (AppSettings) -> Unit,
@@ -559,6 +579,7 @@ private fun TextOverlay(
     onClose: () -> Unit,
 ) {
     var fontPanel by remember { mutableStateOf(false) }
+    var tocOpen by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Paper).blockTaps()) {
             Row(
@@ -569,14 +590,18 @@ private fun TextOverlay(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "닫기", onClose)
-                Text(
-                    title,
-                    color = Ink,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(Modifier.weight(1f)) {
+                    if (bookTitle != null) {
+                        Text(bookTitle, color = Ink, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        title,
+                        color = Ink,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (onShelf != null) TextAction(if (onShelfNow) "★ 책장" else "☆ 책장", onClick = onShelf)
             }
             Line()
@@ -620,6 +645,9 @@ private fun TextOverlay(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (toc.isNotEmpty()) {
+                        LineButton("목차 ${toc.size}", modifier = Modifier.weight(1f)) { tocOpen = true }
+                    }
                     LineButton(
                         if (fontPanel) "글자 설정 닫기" else "글자 설정",
                         bold = fontPanel,
@@ -627,6 +655,47 @@ private fun TextOverlay(
                     ) { fontPanel = !fontPanel }
                     LineButton("화면 새로고침", modifier = Modifier.weight(1f), onClick = onRefresh)
                 }
+            }
+        }
+        if (tocOpen) {
+            TocPanel(toc, tocIndex, onPick = { tocOpen = false; onToc(it) }, onClose = { tocOpen = false })
+        }
+    }
+}
+
+/** 목차: 찾아낸 장 제목 목록. 지금 읽는 장은 굵게 ▶ 표시. */
+@Composable
+private fun TocPanel(toc: List<TextContent.TocEntry>, current: Int, onPick: (Int) -> Unit, onClose: () -> Unit) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (current - 3).coerceAtLeast(0))
+    Column(Modifier.fillMaxSize().background(Paper).blockTaps()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "닫기", onClose)
+            Text("목차", color = Ink, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("${toc.size}개", color = Ink, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 16.dp))
+        }
+        Line()
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            items(toc.size) { i ->
+                val on = i == current
+                Text(
+                    (if (on) "▶  " else "") + toc[i].title,
+                    color = Ink,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (on) FontWeight.Bold else null,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(i) }
+                        .padding(horizontal = 20.dp, vertical = 15.dp),
+                )
+                Line()
             }
         }
     }

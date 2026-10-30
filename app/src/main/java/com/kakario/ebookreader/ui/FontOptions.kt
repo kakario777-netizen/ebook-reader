@@ -29,6 +29,11 @@ fun FontOptions(settings: AppSettings, onChange: (AppSettings) -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
         )
+        LineToggle(
+            "TXT 장 제목 자동으로 찾기",
+            s.txtChapters,
+            sub = "제1장·12화·프롤로그 같은 줄을 찾아 새 페이지 맨 위에 크게 보여주고 목차를 만들어요 (파일은 그대로)",
+        ) { onChange(s.copy(txtChapters = it)) }
 
         LineChoices(
             label = "글꼴",

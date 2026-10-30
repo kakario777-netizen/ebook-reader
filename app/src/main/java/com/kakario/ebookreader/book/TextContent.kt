@@ -13,6 +13,8 @@ import java.io.File
 class TextContent(
     val title: String?,
     val sections: List<Section>,
+    /** 찾아낸 장 제목들 (목차) */
+    val toc: List<TocEntry> = emptyList(),
     private val images: (String) -> ByteArray?,
     private val onClose: () -> Unit = {},
 ) {
@@ -22,11 +24,17 @@ class TextContent(
         val length: Int
     }
 
-    /** 글자 구간: 문단들을 줄바꿈으로 이은 글. heading은 제목 줄의 (시작, 끝) 목록. */
+    /** 제목 줄: 구간 안 글자 범위와 크기(1 = 장 제목 크게, 2 = 작은 제목, 3 = 부제목). */
+    class Heading(val range: IntRange, val level: Int)
+
+    /** 목차 한 줄: 제목과 책 처음부터 센 글자 위치. */
+    class TocEntry(val title: String, val position: Int)
+
+    /** 글자 구간: 문단들을 줄바꿈으로 이은 글. */
     class TextSection(
         override val start: Int,
         val text: String,
-        val headings: List<IntRange>,
+        val headings: List<Heading>,
     ) : Section {
         override val length: Int get() = text.length
     }
@@ -53,6 +61,9 @@ class TextContent(
 
     fun imageBytes(path: String): ByteArray? = images(path)
 
+    /** 글자 위치가 속한 장 (목차 번호, 없으면 -1). */
+    fun tocIndexAt(position: Int): Int = toc.indexOfLast { it.position <= position }
+
     fun close() = onClose()
 
     /** TXT에서 잘린 문장을 다시 이었는지 (메뉴에 표시). */
@@ -74,7 +85,9 @@ class TextContent(
             val sections = ArrayList<Section>()
             var pos = 0
             val sb = StringBuilder()
-            val heads = ArrayList<IntRange>()
+            val heads = ArrayList<Heading>()
+            val toc = ArrayList<TocEntry>()
+            var afterTitle = false
 
             fun flushText() {
                 // 구간 끝의 빈 줄은 버린다
@@ -87,12 +100,36 @@ class TextContent(
                 heads.clear()
             }
 
-            fun addPara(text: String, heading: Boolean) {
-                if (sb.isEmpty() && text.isEmpty()) return // 구간 첫 줄은 빈 줄로 시작하지 않음
+            fun appendLine(text: String) {
                 if (sb.isNotEmpty()) sb.append('\n')
-                val from = sb.length
                 sb.append(text)
-                if (heading && text.isNotEmpty()) heads += from until sb.length
+            }
+
+            fun addPara(text: String, level: Int, sub: Boolean) {
+                if (level == 1 && !sub && text.isNotEmpty()) {
+                    // 장 제목: 새 페이지 맨 위에서 시작
+                    flushText()
+                    toc += TocEntry(text, pos)
+                    appendLine(text)
+                    heads += Heading((sb.length - text.length) until sb.length, 1)
+                    afterTitle = true
+                    return
+                }
+                if (sub && afterTitle && text.isNotEmpty()) {
+                    // 부제목: 장 제목 바로 아래, 목차에도 붙인다
+                    appendLine(text)
+                    heads += Heading((sb.length - text.length) until sb.length, 3)
+                    toc.lastOrNull()?.let { last -> toc[toc.size - 1] = TocEntry(last.title + "  " + text, last.position) }
+                    return
+                }
+                if (afterTitle) {
+                    // 제목과 본문 사이 한 줄 띄움
+                    afterTitle = false
+                    if (text.isNotEmpty()) appendLine("")
+                }
+                if (sb.isEmpty() && text.isEmpty()) return // 구간 첫 줄은 빈 줄로 시작하지 않음
+                appendLine(text)
+                if (level > 0 && text.isNotEmpty()) heads += Heading((sb.length - text.length) until sb.length, 2)
                 if (sb.length >= CHUNK) flushText()
             }
 
@@ -101,12 +138,13 @@ class TextContent(
                     when (b) {
                         is Html.Block.Para -> {
                             if (b.text.length <= LONG_PARA) {
-                                addPara(b.text, b.heading)
+                                addPara(b.text, b.level, b.sub)
                             } else {
-                                splitLong(b.text).forEach { addPara(it, b.heading) }
+                                splitLong(b.text).forEach { addPara(it, b.level, false) }
                             }
                         }
                         is Html.Block.Image -> {
+                            afterTitle = false
                             flushText()
                             sections += ImageSection(pos, b.path)
                             pos += 2
@@ -115,7 +153,7 @@ class TextContent(
                 }
                 flushText()
             }
-            return TextContent(title, sections, images, onClose)
+            return TextContent(title, sections, toc, images, onClose)
         }
 
         private fun splitLong(text: String): List<String> {
@@ -134,10 +172,11 @@ class TextContent(
         }
 
         /** TXT 파일 → 내용. 줄 하나가 문단 하나 (잘린 문장은 reflow 설정에 따라 다시 잇는다). */
-        fun loadTxt(file: File, reflow: Reflow.Mode = Reflow.Mode.AUTO): TextContent {
+        fun loadTxt(file: File, reflow: Reflow.Mode = Reflow.Mode.AUTO, chapters: Boolean = true): TextContent {
             val text = TextDecode.decodeText(file.readBytes())
             val result = Reflow.process(text.split('\n'), reflow)
-            val blocks = result.paragraphs.map { Html.Block.Para(if (result.reflowed) it else it.trimEnd()) }
+            val paras = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
+            val blocks = if (chapters) Chapters.mark(paras) else paras.map { Html.Block.Para(it) }
             val tidy = Html.tidy(blocks)
             return build(file.nameWithoutExtension, listOf(tidy), images = { null }).also { it.reflowed = result.reflowed }
         }

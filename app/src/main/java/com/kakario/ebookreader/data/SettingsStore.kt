@@ -54,6 +54,8 @@ data class AppSettings(
     val justify: Boolean = true,
     /** TXT 잘린 문장 다시 잇기 */
     val txtReflow: Reflow.Mode = Reflow.Mode.AUTO,
+    /** TXT 장 제목(제1장·프롤로그 등) 자동으로 찾아 크게 */
+    val txtChapters: Boolean = true,
     /** 여백 (dp) */
     val marginTop: Int = 28,
     val marginBottom: Int = 20,
@@ -111,6 +113,7 @@ class SettingsStore(context: Context) {
             indent = prefs.getInt("indent", d.indent).coerceIn(0, INDENT_MAX),
             justify = prefs.getBoolean("justify", d.justify),
             txtReflow = enumOf(prefs.getString("txt_reflow", null), d.txtReflow),
+            txtChapters = prefs.getBoolean("txt_chapters", d.txtChapters),
             marginTop = prefs.getInt("margin_top", d.marginTop).coerceIn(0, MARGIN_MAX),
             marginBottom = prefs.getInt("margin_bottom", d.marginBottom).coerceIn(0, MARGIN_MAX),
             marginLeft = prefs.getInt("margin_left", if (oldMargin >= 0) oldMargin else d.marginLeft).coerceIn(0, MARGIN_MAX),
@@ -148,6 +151,7 @@ class SettingsStore(context: Context) {
             .putInt("indent", s.indent)
             .putBoolean("justify", s.justify)
             .putString("txt_reflow", s.txtReflow.name)
+            .putBoolean("txt_chapters", s.txtChapters)
             .putInt("margin_top", s.marginTop)
             .putInt("margin_bottom", s.marginBottom)
             .putInt("margin_left", s.marginLeft)

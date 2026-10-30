@@ -8,8 +8,14 @@ package com.kakario.ebookreader.book
 object Html {
 
     sealed interface Block {
-        /** 문단 하나. text가 빈 문자열이면 빈 줄. */
-        class Para(val text: String, val heading: Boolean = false) : Block
+        /**
+         * 문단 하나. text가 빈 문자열이면 빈 줄.
+         * level: 0 = 본문, 1 = 장 제목(새 페이지 맨 위에 크게), 2 = 작은 제목(굵게)
+         * sub: 장 제목 바로 아래의 부제목 줄
+         */
+        class Para(val text: String, val level: Int = 0, val sub: Boolean = false) : Block {
+            val heading: Boolean get() = level > 0
+        }
         /** 그림 하나 (ZIP 안 경로) — 한 페이지를 통째로 쓴다. */
         class Image(val path: String) : Block
     }
@@ -24,7 +30,7 @@ object Html {
     fun parse(html: String, baseDir: String): List<Block> {
         val out = ArrayList<Block>()
         val sb = StringBuilder()
-        var heading = false
+        var heading = 0
         var skipUntil: String? = null
         var bodyStarted = !html.contains("<body", ignoreCase = true)
 
@@ -33,7 +39,7 @@ object Html {
             sb.setLength(0)
             if (t.isNotEmpty()) out += Block.Para(t, heading)
             else if (blankIfEmpty) out += Block.Para("")
-            heading = false
+            heading = 0
         }
 
         var i = 0
@@ -69,7 +75,7 @@ object Html {
                     name in BREAK_TAGS -> flush()
                     name in HEADINGS -> {
                         flush()
-                        if (!closing) heading = true
+                        if (!closing) heading = if (name == "h1" || name == "h2") 1 else 2
                     }
                     name == "img" && !closing -> {
                         flush()

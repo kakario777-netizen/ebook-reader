@@ -1,14 +1,18 @@
 package com.kakario.ebookreader.viewer
 
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.isSpecified
 import com.kakario.ebookreader.book.TextContent
 import kotlinx.coroutines.Dispatchers
@@ -96,11 +100,29 @@ class Paginator(
 
         val text: AnnotatedString = buildAnnotatedString {
             append(section.text)
-            val headingSize: TextUnit =
-                if (style.fontSize.isSpecified) style.fontSize * 1.15f else TextUnit.Unspecified
-            section.headings.forEach { r ->
-                if (r.last < section.text.length) {
-                    addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = headingSize), r.first, r.last + 1)
+            val base = if (style.fontSize.isSpecified) style.fontSize else 18.sp
+            section.headings.forEach { h ->
+                val r = h.range
+                if (r.last >= section.text.length) return@forEach
+                when (h.level) {
+                    // 장 제목: 크게, 아주 굵게, 가운데
+                    1 -> {
+                        addStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = base * 1.6f), r.first, r.last + 1)
+                        addStyle(
+                            ParagraphStyle(textAlign = TextAlign.Center, textIndent = TextIndent.None, lineHeight = 1.4.em),
+                            r.first, r.last + 1,
+                        )
+                    }
+                    // 부제목: 조금 크게, 가운데
+                    3 -> {
+                        addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = base * 1.2f), r.first, r.last + 1)
+                        addStyle(
+                            ParagraphStyle(textAlign = TextAlign.Center, textIndent = TextIndent.None, lineHeight = 1.5.em),
+                            r.first, r.last + 1,
+                        )
+                    }
+                    // 작은 제목: 굵게
+                    else -> addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = base * 1.15f), r.first, r.last + 1)
                 }
             }
         }
