@@ -10,15 +10,16 @@ enum class ComicLayout(val label: String, val short: String) {
 
 /** 글자 책 글꼴. */
 enum class ReaderFont(val label: String) {
-    DEFAULT("기본 고딕"),
+    GOTHIC("고딕"),
     SERIF("명조"),
-    MONO("고정폭"),
+    SYSTEM("기기 글꼴"),
 }
 
-/** 화면 새로고침(잔상 지우기) 방식. */
-enum class RefreshStyle(val label: String) {
-    BLACK("검은 화면 → 흰 화면 (확실하게)"),
-    WHITE("흰 화면만 (부드럽게)"),
+/** 페이지마다 하는 가벼운 새로고침. */
+enum class LightRefresh(val label: String) {
+    TEXT("글자 줄만"),
+    WHITE("흰 화면"),
+    OFF("안 함"),
 }
 
 /** 앱 설정 전체. 화면에서는 이 묶음 하나를 주고받는다. */
@@ -35,11 +36,11 @@ data class AppSettings(
     val prefetchPages: Int = 6,
 
     // ── 글자 책 (TXT·EPUB)
-    val readerFont: ReaderFont = ReaderFont.DEFAULT,
+    val readerFont: ReaderFont = ReaderFont.GOTHIC,
     /** 글자 크기 (sp) */
     val fontSize: Int = 20,
     /** 글꼴 굵기 100~900 (400 보통, 700 굵게) */
-    val fontWeight: Int = 500,
+    val fontWeight: Int = 600,
     /** 획 두께 보정 0~8 (글꼴과 상관없이 획을 더 두껍게 칠함) */
     val strokeBoost: Int = 0,
     /** 줄 간격 ×10 (17 = 1.7배) */
@@ -57,17 +58,22 @@ data class AppSettings(
     val marginRight: Int = 22,
 
     // ── 화면 새로고침 (이잉크 잔상 지우기)
-    /** 몇 페이지마다 새로고침할지 (0 = 안 함) */
-    val refreshEvery: Int = 1,
-    val refreshStyle: RefreshStyle = RefreshStyle.BLACK,
+    /** 페이지마다: 바뀐 글자 줄만 짧게 검게 칠했다 지우기 */
+    val lightRefresh: LightRefresh = LightRefresh.TEXT,
+    /** 가벼운 새로고침 시간 (ms) */
+    val lightMs: Int = 70,
+    /** 몇 페이지마다 화면 전체를 진하게 새로고침할지 (0 = 안 함) */
+    val fullEvery: Int = 5,
+    /** 전체 새로고침 때 검게 칠해 두는 시간 (ms) */
+    val fullMs: Int = 300,
+    /** 기기 자체 새로고침도 함께 부르기 (지원하는 이잉크 기기만) */
+    val deviceRefresh: Boolean = true,
     /** 목록·화면이 바뀔 때도 새로고침 */
     val refreshOnScreens: Boolean = true,
-    /** 깜빡이는 시간 (ms) */
-    val refreshMs: Int = 100,
 
     // ── 화면 전체
-    /** 앱 글자 굵기 단계 (0 보통, 1 조금 굵게, 2 굵게) */
-    val uiWeight: Int = 1,
+    /** 앱 글자 굵기 단계 (0 보통, 1 조금 굵게, 2 굵게, 3 아주 굵게) */
+    val uiWeight: Int = 2,
     /** 앱 글자 크기 % */
     val uiScale: Int = 105,
     /** 책장 한 줄 권수 */
@@ -93,9 +99,9 @@ class SettingsStore(context: Context) {
             ftpConnections = prefs.getInt("ftp_connections", d.ftpConnections).coerceIn(1, 4),
             prefetchPages = prefs.getInt("prefetch_pages", d.prefetchPages).coerceIn(2, 12),
 
-            readerFont = enumOf(prefs.getString("reader_font", null), d.readerFont),
+            readerFont = enumOf(prefs.getString("reader_font2", null), d.readerFont),
             fontSize = prefs.getInt("font_size", d.fontSize).coerceIn(FONT_MIN, FONT_MAX),
-            fontWeight = prefs.getInt("font_weight", d.fontWeight).coerceIn(WEIGHT_MIN, WEIGHT_MAX),
+            fontWeight = prefs.getInt("font_weight2", d.fontWeight).coerceIn(WEIGHT_MIN, WEIGHT_MAX),
             strokeBoost = prefs.getInt("stroke_boost", d.strokeBoost).coerceIn(0, STROKE_MAX),
             lineSpacing = prefs.getInt("line_spacing", d.lineSpacing).coerceIn(LINE_MIN, LINE_MAX),
             letterSpacing = prefs.getInt("letter_spacing", d.letterSpacing).coerceIn(LETTER_MIN, LETTER_MAX),
@@ -106,12 +112,14 @@ class SettingsStore(context: Context) {
             marginLeft = prefs.getInt("margin_left", if (oldMargin >= 0) oldMargin else d.marginLeft).coerceIn(0, MARGIN_MAX),
             marginRight = prefs.getInt("margin_right", if (oldMargin >= 0) oldMargin else d.marginRight).coerceIn(0, MARGIN_MAX),
 
-            refreshEvery = prefs.getInt("refresh_every", d.refreshEvery).coerceIn(0, 20),
-            refreshStyle = enumOf(prefs.getString("refresh_style", null), d.refreshStyle),
+            lightRefresh = enumOf(prefs.getString("light_refresh", null), d.lightRefresh),
+            lightMs = prefs.getInt("light_ms", d.lightMs).coerceIn(30, 300),
+            fullEvery = prefs.getInt("full_every", d.fullEvery).coerceIn(0, 50),
+            fullMs = prefs.getInt("full_ms", d.fullMs).coerceIn(100, 1000),
+            deviceRefresh = prefs.getBoolean("device_refresh", d.deviceRefresh),
             refreshOnScreens = prefs.getBoolean("refresh_screens", d.refreshOnScreens),
-            refreshMs = prefs.getInt("refresh_ms", d.refreshMs).coerceIn(40, 400),
 
-            uiWeight = prefs.getInt("ui_weight", d.uiWeight).coerceIn(0, 2),
+            uiWeight = prefs.getInt("ui_weight2", d.uiWeight).coerceIn(0, 3),
             uiScale = prefs.getInt("ui_scale", d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
             shelfColumns = prefs.getInt("shelf_columns", d.shelfColumns).coerceIn(2, 6),
             showInfoBar = prefs.getBoolean("info_bar", d.showInfoBar),
@@ -127,9 +135,9 @@ class SettingsStore(context: Context) {
             .putBoolean("slide_animation", s.slideAnimation)
             .putInt("ftp_connections", s.ftpConnections)
             .putInt("prefetch_pages", s.prefetchPages)
-            .putString("reader_font", s.readerFont.name)
+            .putString("reader_font2", s.readerFont.name)
             .putInt("font_size", s.fontSize)
-            .putInt("font_weight", s.fontWeight)
+            .putInt("font_weight2", s.fontWeight)
             .putInt("stroke_boost", s.strokeBoost)
             .putInt("line_spacing", s.lineSpacing)
             .putInt("letter_spacing", s.letterSpacing)
@@ -139,11 +147,13 @@ class SettingsStore(context: Context) {
             .putInt("margin_bottom", s.marginBottom)
             .putInt("margin_left", s.marginLeft)
             .putInt("margin_right", s.marginRight)
-            .putInt("refresh_every", s.refreshEvery)
-            .putString("refresh_style", s.refreshStyle.name)
+            .putString("light_refresh", s.lightRefresh.name)
+            .putInt("light_ms", s.lightMs)
+            .putInt("full_every", s.fullEvery)
+            .putInt("full_ms", s.fullMs)
+            .putBoolean("device_refresh", s.deviceRefresh)
             .putBoolean("refresh_screens", s.refreshOnScreens)
-            .putInt("refresh_ms", s.refreshMs)
-            .putInt("ui_weight", s.uiWeight)
+            .putInt("ui_weight2", s.uiWeight)
             .putInt("ui_scale", s.uiScale)
             .putInt("shelf_columns", s.shelfColumns)
             .putBoolean("info_bar", s.showInfoBar)
@@ -170,10 +180,12 @@ class SettingsStore(context: Context) {
         const val UI_SCALE_MIN = 85
         const val UI_SCALE_MAX = 140
 
-        /** 새로고침 간격 고르기 (0 = 안 함) */
-        val REFRESH_EVERY_OPTIONS = listOf(0, 1, 2, 3, 5, 10)
-        /** 깜빡임 시간 고르기 */
-        val REFRESH_MS_OPTIONS = listOf(60, 100, 160, 250)
+        /** 전체 새로고침 간격 고르기 (0 = 안 함) */
+        val FULL_EVERY_OPTIONS = listOf(0, 3, 5, 8, 10, 20)
+        /** 전체 새로고침 검은 시간 */
+        val FULL_MS_OPTIONS = listOf(200, 300, 450, 600)
+        /** 가벼운 새로고침 시간 */
+        val LIGHT_MS_OPTIONS = listOf(40, 70, 100, 150)
 
         fun weightName(w: Int): String = when {
             w <= 200 -> "아주 가늘게"

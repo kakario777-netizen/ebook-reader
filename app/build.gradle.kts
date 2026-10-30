@@ -43,6 +43,10 @@ android {
     buildFeatures {
         compose = true
     }
+    androidResources {
+        // 글꼴 파일은 압축하지 않고 넣어 바로 읽게 한다
+        noCompress += "ttf"
+    }
 }
 
 dependencies {

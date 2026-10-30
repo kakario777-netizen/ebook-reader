@@ -53,6 +53,7 @@ import com.kakario.ebookreader.model.BookKind
 import com.kakario.ebookreader.model.FileEntry
 import com.kakario.ebookreader.model.folderName
 import com.kakario.ebookreader.thumb.ThumbnailLoader
+import com.kakario.ebookreader.ui.AppFonts
 import com.kakario.ebookreader.ui.FavoritesScreen
 import com.kakario.ebookreader.ui.FtpLocation
 import com.kakario.ebookreader.ui.FtpTab
@@ -110,6 +111,7 @@ class MainActivity : ComponentActivity() {
         val favoriteStore = FavoriteStore(applicationContext)
         val settingsStore = SettingsStore(applicationContext)
         val thumbnails = ThumbnailLoader.get(applicationContext)
+        AppFonts.init(applicationContext)
         val shelf = Shelf(ShelfStore(applicationContext))
         val refresher = Refresher()
 

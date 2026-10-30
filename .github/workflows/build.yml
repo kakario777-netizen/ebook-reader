@@ -27,6 +27,21 @@ jobs:
         with:
           gradle-version: 8.11.1
 
+      # 한글 글꼴 (무료 OFL) — Google Fonts 저장소에서 받아 앱에 넣는다
+      - name: Download fonts
+        run: |
+          set -e
+          D=app/src/main/assets/fonts
+          mkdir -p $D
+          B=https://raw.githubusercontent.com/google/fonts/main/ofl
+          curl -fsSL --retry 3 -o $D/gothic.ttf "$B/notosanskr/NotoSansKR%5Bwght%5D.ttf"
+          curl -fsSL --retry 3 -o $D/serif-400.ttf "$B/nanummyeongjo/NanumMyeongjo-Regular.ttf"
+          curl -fsSL --retry 3 -o $D/serif-700.ttf "$B/nanummyeongjo/NanumMyeongjo-Bold.ttf"
+          curl -fsSL --retry 3 -o $D/serif-800.ttf "$B/nanummyeongjo/NanumMyeongjo-ExtraBold.ttf"
+          curl -fsSL --retry 3 -o $D/OFL-NotoSansKR.txt "$B/notosanskr/OFL.txt"
+          curl -fsSL --retry 3 -o $D/OFL-NanumMyeongjo.txt "$B/nanummyeongjo/OFL.txt"
+          echo "::notice title=fonts::$(ls -la $D | awk 'NR>1{printf "%s %s | ", $9, $5}')"
+
       - name: Build debug APK
         run: |
           set -o pipefail

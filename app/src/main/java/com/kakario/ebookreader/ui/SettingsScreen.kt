@@ -22,9 +22,19 @@ import androidx.compose.ui.unit.dp
 import com.kakario.ebookreader.book.BookCache
 import com.kakario.ebookreader.data.AppSettings
 import com.kakario.ebookreader.data.ComicLayout
-import com.kakario.ebookreader.data.RefreshStyle
+import com.kakario.ebookreader.data.LightRefresh
 import com.kakario.ebookreader.data.SettingsStore
 import com.kakario.ebookreader.model.formatBytes
+
+@Composable
+private fun SubTitle(text: String) {
+    Text(
+        text,
+        color = Ink,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp),
+    )
+}
 
 @Composable
 fun SettingsScreen(
@@ -54,23 +64,45 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
+            SubTitle("① 매 페이지 — 가볍게")
             LineChoices(
-                label = "페이지 넘길 때",
-                options = SettingsStore.REFRESH_EVERY_OPTIONS,
-                selected = s.refreshEvery,
-                text = { if (it == 0) "끔" else if (it == 1) "매번" else "${it}장" },
-            ) { onChange(s.copy(refreshEvery = it)) }
-            s.refreshStyle.let { current ->
-                RefreshStyle.entries.forEach { st ->
-                    LineRadio(st.label, current == st) { onChange(s.copy(refreshStyle = st)) }
-                }
-            }
+                label = null,
+                options = LightRefresh.entries,
+                selected = s.lightRefresh,
+                text = { it.label },
+            ) { onChange(s.copy(lightRefresh = it)) }
+            Text(
+                "글자 줄만: 앞뒤 페이지의 글자 부분만 아주 짧게 검게 칠했다 지워요. 빠르고 글자가 진하게 남아요.",
+                color = Ink,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
             LineChoices(
-                label = "깜빡이는 시간",
-                options = SettingsStore.REFRESH_MS_OPTIONS,
-                selected = s.refreshMs,
+                label = "시간",
+                options = SettingsStore.LIGHT_MS_OPTIONS,
+                selected = s.lightMs,
                 text = { "${it}ms" },
-            ) { onChange(s.copy(refreshMs = it)) }
+            ) { onChange(s.copy(lightMs = it)) }
+
+            SubTitle("② 여러 페이지마다 — 전체를 진하게")
+            LineChoices(
+                label = null,
+                options = SettingsStore.FULL_EVERY_OPTIONS,
+                selected = s.fullEvery,
+                text = { if (it == 0) "끔" else "${it}장" },
+            ) { onChange(s.copy(fullEvery = it)) }
+            LineChoices(
+                label = "검게 칠하는 시간",
+                options = SettingsStore.FULL_MS_OPTIONS,
+                selected = s.fullMs,
+                text = { String.format("%.1f초", it / 1000f) },
+            ) { onChange(s.copy(fullMs = it)) }
+            LineToggle(
+                "기기 자체 새로고침도 쓰기",
+                s.deviceRefresh,
+                sub = if (EinkDevice.supported) "이 기기는 지원해요 — 전체 새로고침 때 함께 불러요"
+                else "이 기기에서는 찾지 못했어요 (켜 둬도 괜찮아요)",
+            ) { onChange(s.copy(deviceRefresh = it)) }
             LineToggle(
                 "목록·화면이 바뀔 때도",
                 s.refreshOnScreens,
@@ -130,9 +162,9 @@ fun SettingsScreen(
             SectionTitle("화면 전체")
             LineChoices(
                 label = "앱 글자 굵기",
-                options = listOf(0, 1, 2),
+                options = listOf(0, 1, 2, 3),
                 selected = s.uiWeight,
-                text = { listOf("보통", "조금 굵게", "굵게")[it] },
+                text = { listOf("보통", "조금", "굵게", "아주")[it] },
             ) { onChange(s.copy(uiWeight = it)) }
             LineStepper(
                 "앱 글자 크기",

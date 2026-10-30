@@ -96,6 +96,7 @@ val PaperColors = lightColorScheme(
 fun inkTypography(weightBoost: Int, scale: Float): Typography {
     val t = Typography()
     fun TextStyle.ink(base: Int) = copy(
+        fontFamily = AppFonts.gothic,
         fontWeight = FontWeight((base + weightBoost * 100).coerceIn(100, 900)),
         fontSize = fontSize * scale,
         lineHeight = lineHeight * scale,

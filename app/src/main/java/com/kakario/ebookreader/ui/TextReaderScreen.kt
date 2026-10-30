@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -59,7 +60,6 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.LineBreak
@@ -76,7 +76,6 @@ import com.kakario.ebookreader.book.Origin
 import com.kakario.ebookreader.book.TextContent
 import com.kakario.ebookreader.data.AppSettings
 import com.kakario.ebookreader.data.ProgressStore
-import com.kakario.ebookreader.data.ReaderFont
 import com.kakario.ebookreader.ftp.FtpBrowser
 import com.kakario.ebookreader.model.BookKind
 import com.kakario.ebookreader.model.FileEntry
@@ -252,11 +251,7 @@ private fun TextPages(
     ) {
         TextStyle(
             color = Ink,
-            fontFamily = when (settings.readerFont) {
-                ReaderFont.DEFAULT -> FontFamily.Default
-                ReaderFont.SERIF -> FontFamily.Serif
-                ReaderFont.MONO -> FontFamily.Monospace
-            },
+            fontFamily = AppFonts.forReader(settings.readerFont),
             fontWeight = FontWeight(settings.fontWeight),
             fontSize = settings.fontSize.sp,
             lineHeight = (settings.lineSpacing / 10f).em,
@@ -307,12 +302,37 @@ private fun TextPages(
         }
     }
 
+    /** 한 페이지에서 글자가 있는 줄들의 화면 위치 (가벼운 새로고침에 쓴다). */
+    fun pageRects(p: Paginator, l: Loc?): List<Rect> {
+        if (l == null) return emptyList()
+        val pad = strokePx + 2f
+        return when (val sp = p.cached(l.section)) {
+            is SectionPages.Text -> {
+                val span = sp.pages.getOrNull(l.page) ?: return emptyList()
+                (span.firstLine..span.lastLine).mapNotNull { i ->
+                    // 빈 줄은 건너뛴다
+                    if (sp.layout.getLineRight(i) - sp.layout.getLineLeft(i) < 1f) return@mapNotNull null
+                    Rect(
+                        left = leftPx + sp.layout.getLineLeft(i) - pad,
+                        top = topPx + sp.layout.getLineTop(i) - span.top,
+                        right = leftPx + sp.layout.getLineRight(i) + pad,
+                        bottom = topPx + sp.layout.getLineBottom(i) - span.top,
+                    )
+                }
+            }
+            is SectionPages.Image -> listOf(Rect(0f, 0f, viewSize.width.toFloat(), viewSize.height.toFloat()))
+            null -> emptyList()
+        }
+    }
+
     fun show(p: Paginator, l: Loc) {
         val sp = p.cached(l.section) ?: return
+        // 앞 페이지와 새 페이지 글자 줄을 함께 칠해야 앞 글자 흔적이 남지 않는다
+        val rects = pageRects(p, loc) + pageRects(p, l)
         loc = l
         position = content.sections[l.section].start + sp.startOffset(l.page)
         progress.set(bookKey, position, total, done = isLast(p, l))
-        refresher?.pageTurn()
+        refresher?.pageTurn(rects)
         prefetchAround(p, l.section)
     }
 
@@ -340,7 +360,7 @@ private fun TextPages(
         if (atEnd) {
             if (!forward) {
                 atEnd = false
-                refresher?.pageTurn()
+                refresher?.pageTurn(listOf(Rect(0f, 0f, viewSize.width.toFloat(), viewSize.height.toFloat())))
             }
             return
         }
@@ -357,7 +377,7 @@ private fun TextPages(
                         }
                         else -> {
                             atEnd = true
-                            refresher?.pageTurn()
+                            refresher?.pageTurn(listOf(Rect(0f, 0f, viewSize.width.toFloat(), viewSize.height.toFloat())))
                             progress.set(bookKey, position, total, done = true)
                         }
                     }
