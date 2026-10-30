@@ -4,14 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +17,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -27,8 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -47,7 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -58,10 +59,13 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -72,7 +76,7 @@ import com.kakario.ebookreader.book.Origin
 import com.kakario.ebookreader.book.TextContent
 import com.kakario.ebookreader.data.AppSettings
 import com.kakario.ebookreader.data.ProgressStore
-import com.kakario.ebookreader.data.SettingsStore
+import com.kakario.ebookreader.data.ReaderFont
 import com.kakario.ebookreader.ftp.FtpBrowser
 import com.kakario.ebookreader.model.BookKind
 import com.kakario.ebookreader.model.FileEntry
@@ -94,7 +98,7 @@ private data class Loc(val section: Int, val page: Int)
 /**
  * 글자 책 보기 (TXT · EPUB).
  * 흰 바탕에 검은 글자만. 탭 왼쪽/오른쪽 = 이전/다음 페이지, 가운데 = 메뉴.
- * 넘김 효과 없이 바로 바뀐다 (가볍고 잔상 없이).
+ * 넘김 효과 없이 바로 바뀌고, 설정한 장 수마다 화면을 새로고침해 이잉크 잔상을 지운다.
  */
 @Composable
 fun TextReaderScreen(
@@ -195,6 +199,8 @@ fun TextReaderScreen(
 
             else -> TextPages(
                 content = c,
+                origin = origin,
+                entry = entry,
                 bookKey = progress.keyFor(origin.tag, entry),
                 title = c.title ?: titleOf(entry.name),
                 fileTitle = titleOf(entry.name),
@@ -211,6 +217,8 @@ fun TextReaderScreen(
 @Composable
 private fun TextPages(
     content: TextContent,
+    origin: Origin,
+    entry: FileEntry,
     bookKey: String,
     title: String,
     fileTitle: String,
@@ -225,20 +233,36 @@ private fun TextPages(
     val fontResolver = LocalFontFamilyResolver.current
     val layoutDirection = LocalLayoutDirection.current
     val progress = remember { ProgressStore.get(context) }
+    val refresher = LocalRefresher.current
+    val shelf = LocalShelf.current
     val scope = rememberCoroutineScope()
     val total = content.totalChars.coerceAtLeast(1)
 
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
-    val topPad = with(density) { 34.dp.roundToPx() }
-    val bottomPad = with(density) { (if (settings.showInfoBar) 34.dp else 26.dp).roundToPx() }
-    val marginPx = with(density) { settings.margin.dp.roundToPx() }
+    // 여백: 아래쪽은 시간·진행률 줄 자리까지
+    val topPx = with(density) { settings.marginTop.dp.roundToPx() }
+    val bottomPx = with(density) { (settings.marginBottom + if (settings.showInfoBar) 22 else 0).dp.roundToPx() }
+    val leftPx = with(density) { settings.marginLeft.dp.roundToPx() }
+    val rightPx = with(density) { settings.marginRight.dp.roundToPx() }
+    val strokePx = with(density) { (settings.strokeBoost * 0.22f).dp.toPx() }
 
-    val style = remember(settings.fontSize, settings.lineSpacing) {
+    val style = remember(
+        settings.fontSize, settings.lineSpacing, settings.readerFont, settings.fontWeight,
+        settings.letterSpacing, settings.indent, settings.justify,
+    ) {
         TextStyle(
             color = Ink,
+            fontFamily = when (settings.readerFont) {
+                ReaderFont.DEFAULT -> FontFamily.Default
+                ReaderFont.SERIF -> FontFamily.Serif
+                ReaderFont.MONO -> FontFamily.Monospace
+            },
+            fontWeight = FontWeight(settings.fontWeight),
             fontSize = settings.fontSize.sp,
             lineHeight = (settings.lineSpacing / 10f).em,
-            textAlign = TextAlign.Justify,
+            letterSpacing = (settings.letterSpacing / 100f).em,
+            textIndent = if (settings.indent > 0) TextIndent(firstLine = settings.indent.em) else TextIndent.None,
+            textAlign = if (settings.justify) TextAlign.Justify else TextAlign.Start,
             lineBreak = LineBreak.Simple,
             lineHeightStyle = LineHeightStyle(
                 alignment = LineHeightStyle.Alignment.Center,
@@ -246,7 +270,7 @@ private fun TextPages(
             ),
         )
     }
-    val paginator = remember(viewSize, style, marginPx, bottomPad) {
+    val paginator = remember(viewSize, style, leftPx, rightPx, topPx, bottomPx) {
         if (viewSize.width <= 0 || viewSize.height <= 0) {
             null
         } else {
@@ -254,8 +278,8 @@ private fun TextPages(
                 content = content,
                 measurer = TextMeasurer(fontResolver, density, layoutDirection, cacheSize = 0),
                 style = style,
-                widthPx = viewSize.width - marginPx * 2,
-                heightPx = viewSize.height - topPad - bottomPad,
+                widthPx = (viewSize.width - leftPx - rightPx).coerceAtLeast(40),
+                heightPx = (viewSize.height - topPx - bottomPx).coerceAtLeast(40),
             )
         }
     }
@@ -273,18 +297,23 @@ private fun TextPages(
         return l.page >= sp.count - 1
     }
 
+    fun prefetchAround(p: Paginator, s: Int) {
+        // 앞뒤 구간은 미리 나눠둔다 (넘길 때 기다리지 않게)
+        scope.launch {
+            runCatching {
+                if (s + 1 < p.sectionCount) p.get(s + 1)
+                if (s > 0) p.get(s - 1)
+            }
+        }
+    }
+
     fun show(p: Paginator, l: Loc) {
         val sp = p.cached(l.section) ?: return
         loc = l
         position = content.sections[l.section].start + sp.startOffset(l.page)
         progress.set(bookKey, position, total, done = isLast(p, l))
-        // 앞뒤 구간은 미리 나눠둔다 (넘길 때 기다리지 않게)
-        scope.launch {
-            runCatching {
-                if (l.section + 1 < p.sectionCount) p.get(l.section + 1)
-                if (l.section > 0) p.get(l.section - 1)
-            }
-        }
+        refresher?.pageTurn()
+        prefetchAround(p, l.section)
     }
 
     /** 글자 위치로 바로 가기 (처음 열 때, 설정 바꿀 때, 막대로 옮길 때). */
@@ -296,12 +325,7 @@ private fun TextPages(
         loc = l
         progress.set(bookKey, pos, total, done = isLast(p, l))
         position = pos
-        scope.launch {
-            runCatching {
-                if (s + 1 < p.sectionCount) p.get(s + 1)
-                if (s > 0) p.get(s - 1)
-            }
-        }
+        prefetchAround(p, s)
     }
 
     LaunchedEffect(paginator) {
@@ -314,7 +338,10 @@ private fun TextPages(
         val l = loc ?: return
         if (busy) return
         if (atEnd) {
-            if (!forward) atEnd = false
+            if (!forward) {
+                atEnd = false
+                refresher?.pageTurn()
+            }
             return
         }
         busy = true
@@ -330,6 +357,7 @@ private fun TextPages(
                         }
                         else -> {
                             atEnd = true
+                            refresher?.pageTurn()
                             progress.set(bookKey, position, total, done = true)
                         }
                     }
@@ -353,6 +381,7 @@ private fun TextPages(
 
     val nav by rememberUpdatedState<(Boolean) -> Unit>({ navigate(it) })
     val volumeNow by rememberUpdatedState(settings.volumeKeys)
+    val overlayNow by rememberUpdatedState(overlay)
     DisposableEffect(Unit) {
         val handler: (KeyEvent) -> Boolean = { e ->
             val dir = PageKeys.direction(e.keyCode, false, volumeNow)
@@ -370,14 +399,17 @@ private fun TextPages(
     Box(
         Modifier
             .fillMaxSize()
+            .background(Paper)
             .onSizeChanged { viewSize = it }
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { pos ->
                     val w = size.width
                     when {
+                        // 메뉴가 떠 있으면 어디를 눌러도 메뉴만 닫는다
+                        overlayNow -> overlay = false
                         pos.x < w / 3f -> nav(false)
                         pos.x > w * 2f / 3f -> nav(true)
-                        else -> overlay = !overlay
+                        else -> overlay = true
                     }
                 })
             }
@@ -390,7 +422,7 @@ private fun TextPages(
                         dx += amount
                         change.consume()
                     },
-                    onDragEnd = { if (kotlin.math.abs(dx) > threshold) nav(dx < 0) },
+                    onDragEnd = { if (!overlayNow && kotlin.math.abs(dx) > threshold) nav(dx < 0) },
                 )
             },
     ) {
@@ -413,11 +445,18 @@ private fun TextPages(
                 val span = sp.pages[l!!.page.coerceIn(0, sp.pages.size - 1)]
                 Canvas(Modifier.fillMaxSize()) {
                     val pageHeight = span.bottom - span.top
-                    clipRect(top = topPad.toFloat(), bottom = topPad + pageHeight + 1f) {
-                        drawText(
-                            textLayoutResult = sp.layout,
-                            topLeft = Offset(marginPx.toFloat(), topPad - span.top),
-                        )
+                    val topLeft = Offset(leftPx.toFloat(), topPx - span.top)
+                    // 이 페이지 줄들만 보이게 자른다 (앞뒤 페이지 글자가 비치지 않게)
+                    clipRect(top = topPx - strokePx, bottom = topPx + pageHeight + strokePx) {
+                        drawText(textLayoutResult = sp.layout, topLeft = topLeft)
+                        if (strokePx > 0f) {
+                            // 획 두껍게 보정: 같은 글자를 테두리로 한 번 더 칠한다
+                            drawText(
+                                textLayoutResult = sp.layout,
+                                topLeft = topLeft,
+                                drawStyle = Stroke(width = strokePx, join = StrokeJoin.Round),
+                            )
+                        }
                     }
                 }
             }
@@ -450,121 +489,109 @@ private fun TextPages(
             )
         }
 
-        TextOverlay(
-            visible = overlay && !atEnd,
-            title = title,
-            fraction = position.toFloat() / total,
-            settings = settings,
-            onSettingsChange = onSettingsChange,
-            onJump = { f ->
-                val pg = paginator
-                if (pg != null) scope.launch { goToPosition(pg, (f * total).toInt().coerceIn(0, total - 1)) }
-            },
-            onClose = onClose,
-        )
+        if (overlay && !atEnd) {
+            TextOverlay(
+                title = title,
+                fraction = position.toFloat() / total,
+                settings = settings,
+                onSettingsChange = onSettingsChange,
+                onShelf = shelf?.let { s -> { s.toggle(origin, entry); Unit } },
+                onShelfNow = shelf?.contains(origin, entry) == true,
+                onRefresh = { refresher?.now() },
+                onJump = { f ->
+                    val pg = paginator
+                    if (pg != null) scope.launch {
+                        goToPosition(pg, (f * total).toInt().coerceIn(0, total - 1))
+                        refresher?.now()
+                    }
+                },
+                onClose = onClose,
+            )
+        }
     }
 }
 
-/** 가운데를 탭하면 나오는 위·아래 메뉴: 진행 막대, 글자 크기·줄 간격·여백. */
+/** 가운데를 탭하면 나오는 위·아래 메뉴: 진행 막대, 글자 설정, 새로고침, 책장. */
 @Composable
 private fun TextOverlay(
-    visible: Boolean,
     title: String,
     fraction: Float,
     settings: AppSettings,
     onSettingsChange: (AppSettings) -> Unit,
+    onShelf: (() -> Unit)?,
+    onShelfNow: Boolean,
+    onRefresh: () -> Unit,
     onJump: (Float) -> Unit,
     onClose: () -> Unit,
 ) {
+    var fontPanel by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            Column(Modifier.fillMaxWidth().background(Paper)) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "닫기", tint = Ink)
-                    }
-                    Text(
-                        title,
-                        color = Ink,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Line()
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Paper).blockTaps()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "닫기", onClose)
+                Text(
+                    title,
+                    color = Ink,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onShelf != null) TextAction(if (onShelfNow) "★ 책장" else "☆ 책장", onClick = onShelf)
             }
+            Line()
         }
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Column(Modifier.fillMaxWidth().background(Paper)) {
-                Line()
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Paper).blockTaps()) {
+            Line()
+            if (fontPanel) {
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .heightIn(max = 380.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 6.dp),
                 ) {
-                    var dragging by remember { mutableStateOf<Float?>(null) }
-                    val shown = dragging ?: fraction
-                    Text("${(shown * 100).roundToInt()}%", color = Ink, style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = shown.coerceIn(0f, 1f),
-                        onValueChange = { dragging = it },
-                        onValueChangeFinished = {
-                            dragging?.let(onJump)
-                            dragging = null
-                        },
-                        colors = LineSliderColors(),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                    LineStepper(
-                        "글자 크기",
-                        "${settings.fontSize}",
-                        onMinus = {
-                            onSettingsChange(settings.copy(fontSize = (settings.fontSize - 1).coerceAtLeast(SettingsStore.FONT_MIN)))
-                        },
-                        onPlus = {
-                            onSettingsChange(settings.copy(fontSize = (settings.fontSize + 1).coerceAtMost(SettingsStore.FONT_MAX)))
-                        },
-                    )
-                    LineStepper(
-                        "줄 간격",
-                        String.format("%.1f", settings.lineSpacing / 10f),
-                        onMinus = {
-                            onSettingsChange(settings.copy(lineSpacing = (settings.lineSpacing - 1).coerceAtLeast(SettingsStore.LINE_MIN)))
-                        },
-                        onPlus = {
-                            onSettingsChange(settings.copy(lineSpacing = (settings.lineSpacing + 1).coerceAtMost(SettingsStore.LINE_MAX)))
-                        },
-                    )
-                    LineStepper(
-                        "좌우 여백",
-                        "${settings.margin}",
-                        onMinus = {
-                            onSettingsChange(settings.copy(margin = (settings.margin - 2).coerceAtLeast(SettingsStore.MARGIN_MIN)))
-                        },
-                        onPlus = {
-                            onSettingsChange(settings.copy(margin = (settings.margin + 2).coerceAtMost(SettingsStore.MARGIN_MAX)))
-                        },
-                    )
+                    FontOptions(settings, onSettingsChange)
+                }
+                Line()
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                var dragging by remember { mutableStateOf<Float?>(null) }
+                val shown = dragging ?: fraction
+                Text("${(shown * 100).roundToInt()}%", color = Ink, style = MaterialTheme.typography.titleMedium)
+                Slider(
+                    value = shown.coerceIn(0f, 1f),
+                    onValueChange = { dragging = it },
+                    onValueChangeFinished = {
+                        dragging?.let(onJump)
+                        dragging = null
+                    },
+                    colors = LineSliderColors(),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LineButton(
+                        if (fontPanel) "글자 설정 닫기" else "글자 설정",
+                        bold = fontPanel,
+                        modifier = Modifier.weight(1f),
+                    ) { fontPanel = !fontPanel }
+                    LineButton("화면 새로고침", modifier = Modifier.weight(1f), onClick = onRefresh)
                 }
             }
         }

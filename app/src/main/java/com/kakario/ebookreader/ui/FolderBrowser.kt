@@ -88,6 +88,7 @@ fun FolderBrowser(
     val context = LocalContext.current
     val progressStore = remember { ProgressStore.get(context) }
     val thumbs = LocalThumbnails.current
+    val shelf = LocalShelf.current
     var menuFor by remember { mutableStateOf<FileEntry?>(null) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
 
@@ -134,9 +135,7 @@ fun FolderBrowser(
                 onBack = onUp,
                 actions = {
                     TextAction(if (isFavorite(path)) "★" else "☆") { toggle(path) }
-                    IconButton(onClick = { reloadKey++ }) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "새로고침", tint = Ink)
-                    }
+                    IconAction(Icons.Outlined.Refresh, "새로고침") { reloadKey++ }
                 },
             )
             Line()
@@ -207,6 +206,14 @@ fun FolderBrowser(
                     if (p.started) InfoLine("읽은 곳", if (p.finished) "다 읽음" else "${p.percent}%")
                     Spacer(Modifier.height(8.dp))
                     Line()
+                    if (shelf != null) {
+                        val onShelf = shelf.contains(origin, target)
+                        MenuLine(if (onShelf) "책장에서 빼기" else "책장에 꽂기 (첫 화면)") {
+                            menuFor = null
+                            val now = shelf.toggle(origin, target)
+                            toast(if (now) "책장에 꽂았어요 — 첫 화면에서 바로 열 수 있어요" else "책장에서 뺐어요")
+                        }
+                    }
                     if (target.hasCover) {
                         MenuLine("표지 다시 만들기") {
                             menuFor = null
@@ -317,7 +324,7 @@ private fun FolderRow(entry: FileEntry, favorite: Boolean, onClick: () -> Unit, 
             entry.name + "/",
             color = Ink,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -335,6 +342,7 @@ private fun BookRow(origin: Origin, entry: FileEntry, onClick: () -> Unit, onLon
     val version = store.version // 뷰어를 닫으면 바뀌어서 다시 그린다
     val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
     val covers = LocalListCovers.current
+    val onShelf = LocalShelf.current?.contains(origin, entry) == true
 
     Row(
         Modifier
@@ -344,7 +352,7 @@ private fun BookRow(origin: Origin, entry: FileEntry, onClick: () -> Unit, onLon
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (covers) {
-            SmallCover(origin, entry, Modifier.size(width = 42.dp, height = 58.dp))
+            BookFace(origin, entry, Modifier.size(width = 44.dp, height = 60.dp))
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -362,6 +370,7 @@ private fun BookRow(origin: Origin, entry: FileEntry, onClick: () -> Unit, onLon
                     append(" · ")
                     append(formatBytes(entry.size))
                     if (p.started) append(if (p.finished) "  ·  다 읽음" else "  ·  ${p.percent}%")
+                    if (onShelf) append("  ·  책장")
                 },
                 color = Ink,
                 style = MaterialTheme.typography.bodySmall,
@@ -393,9 +402,7 @@ fun BrowserHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "뒤로", tint = Ink)
-            }
+            IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "뒤로", onBack)
         } else {
             Spacer(Modifier.width(16.dp))
         }

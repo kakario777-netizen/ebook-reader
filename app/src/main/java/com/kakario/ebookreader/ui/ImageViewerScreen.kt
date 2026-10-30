@@ -4,9 +4,6 @@ import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -196,6 +193,7 @@ fun ImageViewerScreen(
             // 다음 권으로 넘어가면 페이지 상태를 새로 시작하도록 책마다 따로 둔다
             else -> key(entry.path) {
                 BookPager(
+                    origin = origin,
                     bookKey = progress.keyFor(origin.tag, entry),
                     entry = entry,
                     book = book,
@@ -231,6 +229,7 @@ private fun buildSpreads(pageCount: Int, double: Boolean, coverAlone: Boolean): 
 
 @Composable
 private fun BookPager(
+    origin: Origin,
     bookKey: String,
     entry: FileEntry,
     book: PageSource,
@@ -260,10 +259,14 @@ private fun BookPager(
             initialPage = spreads.indexOfFirst { currentPage in it }.coerceAtLeast(0)
         ) { spreads.size + 1 }
         var zoomed by remember { mutableStateOf(false) }
+        val refresher = LocalRefresher.current
+        var firstShown by remember { mutableStateOf(true) }
 
         LaunchedEffect(pagerState.currentPage) {
             val s = pagerState.currentPage
             zoomed = false
+            // 페이지를 넘길 때마다(처음 열 때 빼고) 이잉크 새로고침
+            if (firstShown) firstShown = false else refresher?.pageTurn()
             if (s < spreads.size) {
                 currentPage = spreads[s].first()
                 val last = spreads[s].last()
@@ -347,9 +350,10 @@ private fun BookPager(
                         onZoomChange = { if (index == pagerState.currentPage) zoomed = it },
                         onTap = { x, width ->
                             when {
+                                overlay -> overlay = false
                                 x < width / 3f -> goToSpread(pagerState.currentPage - 1)
                                 x > width * 2f / 3f -> goToSpread(pagerState.currentPage + 1)
-                                else -> overlay = !overlay
+                                else -> overlay = true
                             }
                         },
                     )
@@ -366,8 +370,12 @@ private fun BookPager(
                 )
             }
 
+            val shelf = LocalShelf.current
             ImageOverlay(
                 visible = overlay && pagerState.currentPage < endIndex,
+                onShelf = shelf?.let { sh -> { sh.toggle(origin, entry); Unit } },
+                onShelfNow = shelf?.contains(origin, entry) == true,
+                onRefresh = { refresher?.now() },
                 title = titleOf(entry.name),
                 spread = spreads.getOrNull(pagerState.currentPage) ?: listOf(pageCount - 1),
                 pageCount = pageCount,
@@ -375,7 +383,10 @@ private fun BookPager(
                 settings = settings,
                 onSettingsChange = onSettingsChange,
                 onJump = { page ->
-                    scope.launch { pagerState.scrollToPage(spreads.indexOfFirst { page in it }.coerceAtLeast(0)) }
+                    scope.launch {
+                        pagerState.scrollToPage(spreads.indexOfFirst { page in it }.coerceAtLeast(0))
+                        refresher?.now()
+                    }
                 },
                 onClose = onClose,
             )
@@ -387,6 +398,9 @@ private fun BookPager(
 @Composable
 private fun ImageOverlay(
     visible: Boolean,
+    onShelf: (() -> Unit)?,
+    onShelfNow: Boolean,
+    onRefresh: () -> Unit,
     title: String,
     spread: List<Int>,
     pageCount: Int,
@@ -396,14 +410,10 @@ private fun ImageOverlay(
     onJump: (page: Int) -> Unit,
     onClose: () -> Unit,
 ) {
+    if (!visible) return
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            Column(Modifier.fillMaxWidth().background(Paper)) {
+        Box(Modifier.align(Alignment.TopCenter)) {
+            Column(Modifier.fillMaxWidth().background(Paper).blockTaps()) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -411,9 +421,7 @@ private fun ImageOverlay(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "닫기", tint = Ink)
-                    }
+                    IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "닫기", onClose)
                     Text(
                         title,
                         color = Ink,
@@ -422,18 +430,14 @@ private fun ImageOverlay(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    if (onShelf != null) TextAction(if (onShelfNow) "★ 책장" else "☆ 책장", onClick = onShelf)
                 }
                 Line()
             }
         }
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Column(Modifier.fillMaxWidth().background(Paper)) {
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            Column(Modifier.fillMaxWidth().background(Paper).blockTaps()) {
                 Line()
                 Column(
                     Modifier
@@ -476,6 +480,8 @@ private fun ImageOverlay(
                             }
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    LineButton("화면 새로고침", onClick = onRefresh)
                     Spacer(Modifier.height(4.dp))
                 }
             }

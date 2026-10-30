@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.kakario.ebookreader.book.BookCache
 import com.kakario.ebookreader.data.AppSettings
 import com.kakario.ebookreader.data.ComicLayout
+import com.kakario.ebookreader.data.RefreshStyle
 import com.kakario.ebookreader.data.SettingsStore
 import com.kakario.ebookreader.model.formatBytes
 
@@ -34,19 +35,64 @@ fun SettingsScreen(
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val thumbs = LocalThumbnails.current
+    val refresher = LocalRefresher.current
     val books = remember { BookCache.get(context) }
     var cacheVersion by remember { mutableIntStateOf(0) }
     var confirmClear by remember { mutableStateOf(false) }
+    val s = settings
 
     Column(Modifier.fillMaxSize()) {
         BrowserHeader(title = "설정", subtitle = null, onBack = onClose)
         Line()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
 
+            // ───────── 화면 새로고침
+            SectionTitle("화면 새로고침 (잔상 지우기)")
+            Text(
+                "이잉크 화면에 전 페이지 글자가 흐릿하게 남을 때, 화면 전체를 잠깐 칠했다가 다시 그려 지워요.",
+                color = Ink,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            LineChoices(
+                label = "페이지 넘길 때",
+                options = SettingsStore.REFRESH_EVERY_OPTIONS,
+                selected = s.refreshEvery,
+                text = { if (it == 0) "끔" else if (it == 1) "매번" else "${it}장" },
+            ) { onChange(s.copy(refreshEvery = it)) }
+            s.refreshStyle.let { current ->
+                RefreshStyle.entries.forEach { st ->
+                    LineRadio(st.label, current == st) { onChange(s.copy(refreshStyle = st)) }
+                }
+            }
+            LineChoices(
+                label = "깜빡이는 시간",
+                options = SettingsStore.REFRESH_MS_OPTIONS,
+                selected = s.refreshMs,
+                text = { "${it}ms" },
+            ) { onChange(s.copy(refreshMs = it)) }
+            LineToggle(
+                "목록·화면이 바뀔 때도",
+                s.refreshOnScreens,
+                sub = "탭을 옮기거나 폴더·책을 열고 닫을 때",
+            ) { onChange(s.copy(refreshOnScreens = it)) }
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                LineButton("지금 한 번 해보기") { refresher?.now() }
+            }
+            Spacer(Modifier.height(8.dp))
+            Line()
+
+            // ───────── 글자 책
+            SectionTitle("글자 책 (TXT · EPUB)")
+            FontOptions(s, onChange)
+            Spacer(Modifier.height(8.dp))
+            Line()
+
+            // ───────── 만화
             SectionTitle("만화 (ZIP)")
             ComicLayout.entries.forEach { layout ->
-                LineRadio(layout.label, settings.comicLayout == layout) {
-                    onChange(settings.copy(comicLayout = layout))
+                LineRadio(layout.label, s.comicLayout == layout) {
+                    onChange(s.copy(comicLayout = layout))
                 }
             }
             Text(
@@ -57,64 +103,62 @@ fun SettingsScreen(
             )
             LineToggle(
                 "표지 따로 보기",
-                settings.coverAlone,
+                s.coverAlone,
                 sub = "두 장 보기에서 첫 장(표지)만 혼자 보여주고 다음부터 두 장씩",
-            ) { onChange(settings.copy(coverAlone = it)) }
+            ) { onChange(s.copy(coverAlone = it)) }
             LineToggle(
                 "넘길 때 미끄러지는 효과",
-                settings.slideAnimation,
-                sub = "끄면 효과 없이 바로 바뀌어요",
-            ) { onChange(settings.copy(slideAnimation = it)) }
+                s.slideAnimation,
+                sub = "이잉크에서는 끄는 게 좋아요 (끄면 바로 바뀜)",
+            ) { onChange(s.copy(slideAnimation = it)) }
             LineStepper(
                 "FTP 동시 연결",
-                "${settings.ftpConnections}개",
-                onMinus = { onChange(settings.copy(ftpConnections = (settings.ftpConnections - 1).coerceAtLeast(1))) },
-                onPlus = { onChange(settings.copy(ftpConnections = (settings.ftpConnections + 1).coerceAtMost(4))) },
+                "${s.ftpConnections}개",
+                onMinus = { onChange(s.copy(ftpConnections = (s.ftpConnections - 1).coerceAtLeast(1))) },
+                onPlus = { onChange(s.copy(ftpConnections = (s.ftpConnections + 1).coerceAtMost(4))) },
             )
             LineStepper(
                 "미리 받을 페이지",
-                "${settings.prefetchPages}장",
-                onMinus = { onChange(settings.copy(prefetchPages = (settings.prefetchPages - 2).coerceAtLeast(2))) },
-                onPlus = { onChange(settings.copy(prefetchPages = (settings.prefetchPages + 2).coerceAtMost(12))) },
+                "${s.prefetchPages}장",
+                onMinus = { onChange(s.copy(prefetchPages = (s.prefetchPages - 2).coerceAtLeast(2))) },
+                onPlus = { onChange(s.copy(prefetchPages = (s.prefetchPages + 2).coerceAtMost(12))) },
             )
             Spacer(Modifier.height(8.dp))
             Line()
 
-            SectionTitle("글자 책 (TXT · EPUB)")
+            // ───────── 화면 전체
+            SectionTitle("화면 전체")
+            LineChoices(
+                label = "앱 글자 굵기",
+                options = listOf(0, 1, 2),
+                selected = s.uiWeight,
+                text = { listOf("보통", "조금 굵게", "굵게")[it] },
+            ) { onChange(s.copy(uiWeight = it)) }
             LineStepper(
-                "글자 크기",
-                "${settings.fontSize}",
-                onMinus = { onChange(settings.copy(fontSize = (settings.fontSize - 1).coerceAtLeast(SettingsStore.FONT_MIN))) },
-                onPlus = { onChange(settings.copy(fontSize = (settings.fontSize + 1).coerceAtMost(SettingsStore.FONT_MAX))) },
+                "앱 글자 크기",
+                "${s.uiScale}%",
+                onMinus = { onChange(s.copy(uiScale = (s.uiScale - 5).coerceAtLeast(SettingsStore.UI_SCALE_MIN))) },
+                onPlus = { onChange(s.copy(uiScale = (s.uiScale + 5).coerceAtMost(SettingsStore.UI_SCALE_MAX))) },
             )
             LineStepper(
-                "줄 간격",
-                String.format("%.1f", settings.lineSpacing / 10f),
-                onMinus = { onChange(settings.copy(lineSpacing = (settings.lineSpacing - 1).coerceAtLeast(SettingsStore.LINE_MIN))) },
-                onPlus = { onChange(settings.copy(lineSpacing = (settings.lineSpacing + 1).coerceAtMost(SettingsStore.LINE_MAX))) },
+                "책장 한 줄 권수",
+                "${s.shelfColumns}권",
+                onMinus = { onChange(s.copy(shelfColumns = (s.shelfColumns - 1).coerceAtLeast(2))) },
+                onPlus = { onChange(s.copy(shelfColumns = (s.shelfColumns + 1).coerceAtMost(6))) },
             )
-            LineStepper(
-                "좌우 여백",
-                "${settings.margin}",
-                onMinus = { onChange(settings.copy(margin = (settings.margin - 2).coerceAtLeast(SettingsStore.MARGIN_MIN))) },
-                onPlus = { onChange(settings.copy(margin = (settings.margin + 2).coerceAtMost(SettingsStore.MARGIN_MAX))) },
-            )
-            Spacer(Modifier.height(8.dp))
-            Line()
-
-            SectionTitle("공통")
-            LineToggle("목록에 표지 보이기", settings.listCovers, sub = "끄면 글자만 보여요") {
-                onChange(settings.copy(listCovers = it))
+            LineToggle("목록에 표지 보이기", s.listCovers, sub = "끄면 글자만 보여요") {
+                onChange(s.copy(listCovers = it))
             }
-            LineToggle("보는 중 시간·진행률 표시", settings.showInfoBar) {
-                onChange(settings.copy(showInfoBar = it))
+            LineToggle("보는 중 시간·진행률 표시", s.showInfoBar) {
+                onChange(s.copy(showInfoBar = it))
             }
-            LineToggle("볼륨 버튼으로 넘기기", settings.volumeKeys, sub = "아래 = 다음, 위 = 이전") {
-                onChange(settings.copy(volumeKeys = it))
+            LineToggle("볼륨 버튼으로 넘기기", s.volumeKeys, sub = "아래 = 다음, 위 = 이전") {
+                onChange(s.copy(volumeKeys = it))
             }
             Spacer(Modifier.height(8.dp))
             Line()
 
+            // ───────── 저장공간
             SectionTitle("저장공간")
             val thumbBytes = remember(cacheVersion) { thumbs?.diskCacheBytes() ?: 0L }
             val bookBytes = remember(cacheVersion) { books.sizeBytes() }
@@ -145,7 +189,7 @@ fun SettingsScreen(
             },
             dismiss = { DialogAction("취소") { confirmClear = false } },
         ) {
-            Text("표지와 받아둔 책을 지워요.\n읽은 위치·즐겨찾기·서버 정보는 그대로예요.", color = Ink)
+            Text("표지와 받아둔 책을 지워요.\n읽은 위치·책장·즐겨찾기·서버 정보는 그대로예요.", color = Ink)
         }
     }
 }

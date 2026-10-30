@@ -1,19 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 흰 바탕에 검은 선으로만 그린 펼친 책 (108dp 캔버스, 가운데 72dp가 안전 영역) -->
+<!-- 흰 바탕에 검은 선으로 그린 양장본 한 권 (108dp 캔버스, 가운데 72dp가 안전 영역)
+     책등 홈 · 제목 칸 두 줄 장식 · 오른쪽/아래 종이 결 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- 뒤로 겹친 종이 결 -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M37,79 L74,79 L74,32 M38.5,80.5 L75.5,80.5 L75.5,33.5 M40,82 L77,82 L77,35" />
+    <!-- 표지 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2.4"
+        android:strokeLineJoin="round"
+        android:pathData="M33,26 L72,26 L72,77 L33,77 Z" />
+    <!-- 책등 홈 -->
     <path
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000"
-        android:pathData="M54,42 L34,38 L34,70 L54,74 L74,70 L74,38 Z M54,42 L54,74" />
+        android:pathData="M40,26 L40,77" />
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:pathData="M37.5,26 L37.5,77" />
+    <!-- 제목 칸 위아래 두 줄 장식 -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M46,37 L66,37 M46,52 L66,52" />
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="round"
+        android:pathData="M46,39.5 L66,39.5 M46,49.5 L66,49.5" />
+    <!-- 제목 글줄 -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M49,43.5 L63,43.5 M51.5,46.3 L60.5,46.3" />
+    <!-- 아래 작은 표시 -->
     <path
         android:strokeColor="#FF000000"
         android:strokeWidth="1.2"
         android:strokeLineCap="round"
-        android:pathData="M39,47 L49,49 M39,53 L49,55 M39,59 L49,61 M59,49 L69,47 M59,55 L69,53 M59,61 L69,59" />
+        android:pathData="M53,69 L59,69" />
 </vector>

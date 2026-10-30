@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,6 +46,7 @@ import com.kakario.ebookreader.data.Favorite
 import com.kakario.ebookreader.data.FavoriteStore
 import com.kakario.ebookreader.data.FtpServer
 import com.kakario.ebookreader.data.ServerStore
+import com.kakario.ebookreader.data.ShelfStore
 import com.kakario.ebookreader.data.SettingsStore
 import com.kakario.ebookreader.ftp.FtpBrowser
 import com.kakario.ebookreader.model.BookKind
@@ -54,7 +56,14 @@ import com.kakario.ebookreader.thumb.ThumbnailLoader
 import com.kakario.ebookreader.ui.FavoritesScreen
 import com.kakario.ebookreader.ui.FtpLocation
 import com.kakario.ebookreader.ui.FtpTab
+import com.kakario.ebookreader.ui.IconAction
 import com.kakario.ebookreader.ui.ImageViewerScreen
+import com.kakario.ebookreader.ui.InkTheme
+import com.kakario.ebookreader.ui.LocalRefresher
+import com.kakario.ebookreader.ui.LocalShelf
+import com.kakario.ebookreader.ui.RefreshOverlay
+import com.kakario.ebookreader.ui.Refresher
+import com.kakario.ebookreader.ui.Shelf
 import com.kakario.ebookreader.ui.Ink
 import com.kakario.ebookreader.ui.Line
 import com.kakario.ebookreader.ui.LocalListCovers
@@ -84,7 +93,7 @@ data class OpenBook(
         }
 }
 
-private val TABS = listOf("즐겨찾기", "FTP", "내 폰")
+private val TABS = listOf("책장", "FTP", "내 폰")
 private const val TAB_FAVORITES = 0
 private const val TAB_FTP = 1
 private const val TAB_LOCAL = 2
@@ -101,6 +110,8 @@ class MainActivity : ComponentActivity() {
         val favoriteStore = FavoriteStore(applicationContext)
         val settingsStore = SettingsStore(applicationContext)
         val thumbnails = ThumbnailLoader.get(applicationContext)
+        val shelf = Shelf(ShelfStore(applicationContext))
+        val refresher = Refresher()
 
         setContent {
             var settings by remember { mutableStateOf(settingsStore.load()) }
@@ -109,10 +120,14 @@ class MainActivity : ComponentActivity() {
                 settingsStore.save(it)
             }
 
-            MaterialTheme(colorScheme = PaperColors) {
+            SideEffect { refresher.update(settings) }
+
+            InkTheme(weightBoost = settings.uiWeight, scalePercent = settings.uiScale) {
               CompositionLocalProvider(
                 LocalThumbnails provides thumbnails,
                 LocalListCovers provides settings.listCovers,
+                LocalShelf provides shelf,
+                LocalRefresher provides refresher,
               ) {
                 var settingsOpen by remember { mutableStateOf(false) }
                 var openBook by remember { mutableStateOf<OpenBook?>(null) }
@@ -131,6 +146,12 @@ class MainActivity : ComponentActivity() {
                 val ftpBrowser = remember(openServer) { openServer?.let { FtpBrowser(it) } }
                 DisposableEffect(ftpBrowser) {
                     onDispose { ftpBrowser?.let { b -> GlobalScope.launch { b.close() } } }
+                }
+
+                // 화면이 바뀌면(탭·폴더·책 열고 닫기·설정) 이잉크 새로고침
+                var firstScreen by remember { mutableStateOf(true) }
+                LaunchedEffect(tab, settingsOpen, ftpLocation?.server?.id, ftpLocation?.path, localPath, openBook?.entry?.path) {
+                    if (firstScreen) firstScreen = false else refresher.screenChange()
                 }
 
                 fun isFavorite(serverId: Long?, path: String) =
@@ -172,6 +193,12 @@ class MainActivity : ComponentActivity() {
                                     TAB_FAVORITES -> FavoritesScreen(
                                         favorites = favorites,
                                         servers = servers,
+                                        shelf = shelf,
+                                        columns = settings.shelfColumns,
+                                        onOpenBook = { origin, b ->
+                                            val e = b.toEntry()
+                                            openBook = OpenBook(origin, e, listOf(e))
+                                        },
                                         onOpen = { fav ->
                                             if (fav.isLocal) {
                                                 localPath = fav.path
@@ -211,6 +238,7 @@ class MainActivity : ComponentActivity() {
                                             if (favorites.removeAll { it.serverId == server.id }) {
                                                 favoriteStore.save(favorites)
                                             }
+                                            shelf.removeServer(server.id)
                                         },
                                         isFavorite = { id, path -> isFavorite(id, path) },
                                         onToggleFavorite = { id, path -> toggleFavorite(id, path) },
@@ -258,6 +286,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
+                    // 맨 위: 이잉크 새로고침 깜빡임
+                    RefreshOverlay(refresher)
                 }
               }
             }
@@ -294,20 +325,18 @@ private fun TabBar(selected: Int, onSelect: (Int) -> Unit, onSettings: () -> Uni
                     label,
                     color = Ink,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (on) FontWeight.Black else null,
                     modifier = Modifier.padding(vertical = 10.dp),
                 )
                 Box(
                     Modifier
-                        .width(24.dp)
-                        .height(1.5.dp)
+                        .width(28.dp)
+                        .height(2.5.dp)
                         .background(if (on) Ink else Paper)
                 )
             }
         }
         Box(Modifier.weight(1f))
-        IconButton(onClick = onSettings) {
-            Icon(Icons.Outlined.Settings, contentDescription = "설정", tint = Ink)
-        }
+        IconAction(Icons.Outlined.Settings, "설정", onSettings)
     }
 }
