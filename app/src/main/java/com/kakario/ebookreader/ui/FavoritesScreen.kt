@@ -52,6 +52,8 @@ fun FavoritesScreen(
     shelf: Shelf,
     columns: Int,
     onColumnsChange: (Int) -> Unit,
+    sort: com.kakario.ebookreader.data.ShelfSort = com.kakario.ebookreader.data.ShelfSort.ADDED,
+    onSortChange: (com.kakario.ebookreader.data.ShelfSort) -> Unit = {},
     onCheckUpdate: () -> Unit,
     onOpen: (Favorite) -> Unit,
     onRemove: (Favorite) -> Unit,
@@ -63,9 +65,19 @@ fun FavoritesScreen(
     val progress = remember { ProgressStore.get(context) }
 
     // 서버가 지워진 책은 보여주지 않는다
-    val books = shelf.books.mapNotNull { b ->
+    val books0 = shelf.books.mapNotNull { b ->
         if (b.serverId == null) Origin(null) to b
         else servers.firstOrNull { it.id == b.serverId }?.let { Origin(it) to b }
+    }
+    val books = remember(books0, sort, progress.version) {
+        when (sort) {
+            com.kakario.ebookreader.data.ShelfSort.ADDED -> books0
+            com.kakario.ebookreader.data.ShelfSort.NAME ->
+                books0.sortedWith { a, b -> com.kakario.ebookreader.model.NaturalOrder.compare(a.second.name, b.second.name) }
+            com.kakario.ebookreader.data.ShelfSort.RECENT -> books0.sortedByDescending { (o, b) ->
+                progress.time(progress.keyFor(o.tag, b.toEntry()))
+            }
+        }
     }
 
     LazyVerticalGrid(
@@ -80,6 +92,11 @@ fun FavoritesScreen(
                     subtitle = if (books.isEmpty()) null else "${books.size}권 · 길게 누르면 뺄 수 있어요",
                     onBack = null,
                     actions = {
+                        // 정렬: 누를 때마다 꽂은 순 → 최근 읽은 순 → 이름순
+                        LineButton(sort.label, modifier = Modifier.padding(end = 6.dp)) {
+                            val all = com.kakario.ebookreader.data.ShelfSort.entries
+                            onSortChange(all[(sort.ordinal + 1) % all.size])
+                        }
                         // 책 크기: 작게(한 줄에 더 많이) / 크게
                         LineButton("작게", modifier = Modifier.padding(end = 6.dp), enabled = columns < SettingsStore.SHELF_MAX) {
                             onColumnsChange(columns + 1)
@@ -115,6 +132,7 @@ fun FavoritesScreen(
                         entry = entry,
                         badge = when {
                             p.finished -> "완독"
+                            !p.started -> "NEW"
                             else -> "${p.percent}%"
                         },
                         compact = columns >= 5,

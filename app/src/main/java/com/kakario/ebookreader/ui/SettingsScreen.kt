@@ -140,6 +140,11 @@ fun SettingsScreen(
                 sub = "두 장 보기에서 첫 장(표지)만 혼자 보여주고 다음부터 두 장씩",
             ) { onChange(s.copy(coverAlone = it)) }
             LineToggle(
+                "두 번 톡 쳐서 확대",
+                s.doubleTapZoom,
+                sub = "끄면 두 번 톡이 그냥 넘기기로 동작해요 (두 손가락 확대는 언제나 돼요)",
+            ) { onChange(s.copy(doubleTapZoom = it)) }
+            LineToggle(
                 "넘길 때 미끄러지는 효과",
                 s.slideAnimation,
                 sub = "이잉크에서는 끄는 게 좋아요 (끄면 바로 바뀜)",

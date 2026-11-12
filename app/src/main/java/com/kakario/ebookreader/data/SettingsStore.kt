@@ -16,6 +16,13 @@ enum class LightRefresh(val label: String) {
     OFF("안 함"),
 }
 
+/** 책장 정렬 방식. */
+enum class ShelfSort(val label: String) {
+    ADDED("꽂은 순"),
+    RECENT("최근 읽은 순"),
+    NAME("이름순"),
+}
+
 /** 앱 설정 전체. 화면에서는 이 묶음 하나를 주고받는다. */
 data class AppSettings(
     // ── 만화
@@ -83,6 +90,10 @@ data class AppSettings(
     val uiScale: Int = 105,
     /** 책장 한 줄 권수 */
     val shelfColumns: Int = 6,
+    /** 책장 정렬 */
+    val shelfSort: ShelfSort = ShelfSort.ADDED,
+    /** 만화: 두 번 톡 쳐서 확대 */
+    val doubleTapZoom: Boolean = false,
     /** 보는 중 화면 아래에 시간·진행률 표시 */
     val showInfoBar: Boolean = true,
     /** 볼륨 버튼으로 넘기기 (페이지 터너 키는 항상 동작) */
@@ -137,6 +148,8 @@ class SettingsStore(context: Context) {
             uiScale = prefs.getInt("ui_scale", d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
             shelfColumns = prefs.getInt("shelf_columns2", d.shelfColumns).coerceIn(SHELF_MIN, SHELF_MAX),
             showInfoBar = prefs.getBoolean("info_bar", d.showInfoBar),
+            shelfSort = enumOf(prefs.getString("shelf_sort", null), d.shelfSort),
+            doubleTapZoom = prefs.getBoolean("double_tap_zoom", d.doubleTapZoom),
             volumeKeys = prefs.getBoolean("volume_keys", d.volumeKeys),
             listCovers = prefs.getBoolean("list_covers", d.listCovers),
         )
@@ -176,6 +189,8 @@ class SettingsStore(context: Context) {
             .putInt("ui_scale", s.uiScale)
             .putInt("shelf_columns2", s.shelfColumns)
             .putBoolean("info_bar", s.showInfoBar)
+            .putString("shelf_sort", s.shelfSort.name)
+            .putBoolean("double_tap_zoom", s.doubleTapZoom)
             .putBoolean("volume_keys", s.volumeKeys)
             .putBoolean("list_covers", s.listCovers)
             .apply()

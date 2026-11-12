@@ -223,6 +223,8 @@ class MainActivity : ComponentActivity() {
                                         onCheckUpdate = { updater.check(quiet = false) },
                                         columns = settings.shelfColumns,
                                         onColumnsChange = { changeSettings(settings.copy(shelfColumns = it)) },
+                                        sort = settings.shelfSort,
+                                        onSortChange = { changeSettings(settings.copy(shelfSort = it)) },
                                         onOpenBook = { origin, b ->
                                             val e = b.toEntry()
                                             openScope.launch {

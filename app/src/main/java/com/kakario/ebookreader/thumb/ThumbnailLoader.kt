@@ -208,19 +208,8 @@ class ThumbnailLoader private constructor(context: Context) {
 
     /** 원본 그림을 목록용 크기로 줄인다. */
     private fun scaleDown(raw: ByteArray): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= TARGET_WIDTH) sample *= 2
-        val decoded = BitmapFactory.decodeByteArray(
-            raw, 0, raw.size,
-            BitmapFactory.Options().apply {
-                inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.RGB_565
-            },
-        ) ?: return null
+        val decoded = com.kakario.ebookreader.viewer.ImageDecode.decode(raw, TARGET_WIDTH * 3, Bitmap.Config.RGB_565)
+            ?: return null
 
         if (decoded.width <= TARGET_WIDTH) return decoded
         val h = (decoded.height.toLong() * TARGET_WIDTH / decoded.width).toInt().coerceAtLeast(1)

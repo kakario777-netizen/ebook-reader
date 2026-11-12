@@ -348,6 +348,7 @@ private fun BookPager(
                     SpreadView(
                         book = book,
                         pages = spreads[index],
+                        doubleTapZoom = settings.doubleTapZoom,
                         onZoomChange = { if (index == pagerState.currentPage) zoomed = it },
                         onTap = { x, width ->
                             when {
@@ -556,6 +557,7 @@ fun EndCard(
 private fun SpreadView(
     book: PageSource,
     pages: List<Int>,
+    doubleTapZoom: Boolean,
     onZoomChange: (Boolean) -> Unit,
     onTap: (x: Float, width: Float) -> Unit,
 ) {
@@ -574,10 +576,10 @@ private fun SpreadView(
         Modifier
             .fillMaxSize()
             .onSizeChanged { size = it }
-            .pointerInput(pages) {
+            .pointerInput(pages, doubleTapZoom) {
                 detectTapGestures(
                     onTap = { pos -> if (scale <= 1f) onTap(pos.x, size.width.toFloat()) },
-                    onDoubleTap = { pos ->
+                    onDoubleTap = if (!doubleTapZoom) null else { pos ->
                         if (scale > 1f) {
                             scale = 1f
                             offset = Offset.Zero

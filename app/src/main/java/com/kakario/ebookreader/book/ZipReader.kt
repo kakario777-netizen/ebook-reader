@@ -23,7 +23,7 @@ object ZipReader {
     private const val MAX_CEN_SIZE = 8 * 1024 * 1024
     private const val MAX_IMAGE_SIZE = 60 * 1024 * 1024
 
-    private val IMAGE_EXT = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
+    private val IMAGE_EXT = setOf("jpg", "jpeg", "jpe", "jfif", "png", "webp", "gif", "bmp", "avif", "heic", "heif")
 
     data class Entry(
         val name: String,
@@ -37,8 +37,81 @@ object ZipReader {
     /** 표지 이미지의 원본 바이트. 이미지가 없거나 읽을 수 없는 ZIP이면 null. */
     fun firstImage(src: RangeSource): ByteArray? {
         val entries = listEntries(src) ?: return null
-        val cover = pickCover(entries) ?: return null
-        return extract(src, cover)
+        val cover = pickCover(entries)
+        if (cover != null) return extract(src, cover)
+        // 2중 압축: 그림이 없고 ZIP이 들어 있으면 첫 ZIP 안의 첫 그림
+        val inner = innerArchives(entries).firstOrNull() ?: return null
+        val innerSrc = when (inner.method) {
+            0 -> dataStart(src, inner)?.let { OffsetSource(src, it, inner.compressedSize) }
+            else -> extract(src, inner)?.let { ByteSource(it) }
+        } ?: return null
+        val innerEntries = listEntries(innerSrc) ?: return null
+        val c = pickCover(innerEntries) ?: return null
+        return extract(innerSrc, c)
+    }
+
+    /** ZIP 안에 들어 있는 ZIP들 (2중 압축), 이름순. */
+    fun innerArchives(entries: List<Entry>): List<Entry> =
+        entries
+            .filter { e ->
+                !e.name.endsWith("/") && !e.name.contains("__MACOSX") &&
+                    e.name.substringAfterLast('.', "").lowercase() in setOf("zip", "cbz") &&
+                    (e.flags and 1) == 0 && (e.method == 0 || e.method == 8)
+            }
+            .sortedWith { a, b -> NaturalOrder.compare(a.name, b.name) }
+
+    /** 항목 데이터가 시작하는 실제 위치 (로컬 헤더 뒤). */
+    fun dataStart(src: RangeSource, entry: Entry): Long? {
+        val h = src.read(entry.localOffset, 30)
+        if (h.size < 30 || u32(h, 0) != LOC_SIG) return null
+        return entry.localOffset + 30 + u16(h, 26) + u16(h, 28)
+    }
+
+    /** 압축된 항목을 조금씩 읽어 파일로 푼다 (큰 안쪽 ZIP용). */
+    fun extractToFile(src: RangeSource, entry: Entry, out: java.io.File): Boolean {
+        val start = dataStart(src, entry) ?: return false
+        val inflater = Inflater(true)
+        return try {
+            out.outputStream().buffered().use { os ->
+                val buf = ByteArray(256 * 1024)
+                var pos = 0L
+                while (!inflater.finished()) {
+                    if (inflater.needsInput()) {
+                        if (pos >= entry.compressedSize) break
+                        val n = minOf(1L shl 20, entry.compressedSize - pos).toInt()
+                        val chunk = src.read(start + pos, n)
+                        if (chunk.isEmpty()) break
+                        pos += chunk.size
+                        inflater.setInput(chunk)
+                    }
+                    val n = inflater.inflate(buf)
+                    if (n > 0) os.write(buf, 0, n)
+                    else if (inflater.needsDictionary()) return false
+                }
+            }
+            inflater.finished()
+        } catch (e: Exception) {
+            false
+        } finally {
+            inflater.end()
+        }
+    }
+
+    /** 바깥 ZIP 안의 '저장만 된' 안쪽 ZIP을 따로 떼지 않고 그 자리에서 읽는 통로. */
+    class OffsetSource(private val base: RangeSource, private val start: Long, override val size: Long) : RangeSource {
+        override fun read(offset: Long, length: Int): ByteArray {
+            val n = minOf(length.toLong(), size - offset).coerceAtLeast(0).toInt()
+            return base.read(start + offset, n)
+        }
+    }
+
+    /** 메모리에 있는 ZIP. */
+    class ByteSource(private val bytes: ByteArray) : RangeSource {
+        override val size: Long get() = bytes.size.toLong()
+        override fun read(offset: Long, length: Int): ByteArray {
+            val from = offset.coerceIn(0, size).toInt()
+            return bytes.copyOfRange(from, minOf(bytes.size, from + length))
+        }
     }
 
     /** 만화 페이지로 쓸 이미지들을 이름순(숫자는 숫자로)으로. */

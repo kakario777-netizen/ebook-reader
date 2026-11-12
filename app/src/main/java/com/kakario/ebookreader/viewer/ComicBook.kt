@@ -58,7 +58,15 @@ class ComicBook(
     private val localLock = Any()
     private var localFile: FileRange? = null
 
-    private var pages: List<ZipReader.Entry> = emptyList()
+    /** 페이지 하나: nest가 -1이면 바깥 ZIP의 그림, 아니면 nests[nest] 안쪽 ZIP의 그림 (2중 압축). */
+    private class Page(val nest: Int, val entry: ZipReader.Entry)
+
+    /** 안쪽 ZIP: 저장만 됐으면 바깥 파일의 start 위치에서 바로 읽고, 압축됐으면 풀어 둔 임시 파일에서 읽는다. */
+    private class Nest(val start: Long, val size: Long, val file: FileRange?, val temp: File?)
+
+    private var pages: List<Page> = emptyList()
+    private val nests = ArrayList<Nest>()
+    private val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/data/local/tmp")
     val pageCount: Int get() = pages.size
 
     private val heap = Runtime.getRuntime().maxMemory()
@@ -82,7 +90,17 @@ class ComicBook(
     override suspend fun open(onProgress: (done: Long, total: Long) -> Unit): Int {
         val entries = withSource { ZipReader.listEntries(it) }
             ?: throw UserFacingException("ZIP 파일을 읽을 수 없어요.\n파일이 손상됐거나 ZIP 형식이 아닐 수 있어요.")
-        pages = ZipReader.imagePages(entries)
+        val list = ArrayList<Page>()
+        ZipReader.imagePages(entries).forEach { list += Page(-1, it) }
+        // 2중 압축: ZIP 안의 ZIP들도 이름순으로 이어서 본다
+        for (inner in ZipReader.innerArchives(entries)) {
+            val nest = runCatching { openNest(inner) }.getOrNull() ?: continue
+            val innerEntries = runCatching { withNest(nest) { ZipReader.listEntries(it) } }.getOrNull() ?: continue
+            val idx = nests.size
+            nests += nest
+            ZipReader.imagePages(innerEntries).forEach { list += Page(idx, it) }
+        }
+        pages = list
         if (pages.isEmpty()) throw UserFacingException("이 ZIP 안에는 볼 수 있는 이미지가 없어요.")
         return pages.size
     }
@@ -126,8 +144,13 @@ class ComicBook(
         val job = rawInFlight.getOrPut(index) {
             scope.async {
                 try {
-                    val e = pages.getOrNull(index) ?: throw UserFacingException("없는 페이지예요")
-                    val bytes = if (prefetch) {
+                    val pg = pages.getOrNull(index) ?: throw UserFacingException("없는 페이지예요")
+                    val e = pg.entry
+                    val bytes = if (pg.nest >= 0) {
+                        val nest = nests[pg.nest]
+                        if (prefetch && nest.file == null) prefetchGate.withPermit { withNest(nest) { ZipReader.extract(it, e) } }
+                        else withNest(nest) { ZipReader.extract(it, e) }
+                    } else if (prefetch) {
                         prefetchGate.withPermit { withSource { ZipReader.extract(it, e) } }
                     } else {
                         withSource { ZipReader.extract(it, e) }
@@ -140,6 +163,26 @@ class ComicBook(
             }
         }
         return job.await()
+    }
+
+    private suspend fun openNest(inner: ZipReader.Entry): Nest? {
+        if (inner.method == 0) {
+            val start = withSource { ZipReader.dataStart(it, inner) } ?: return null
+            return Nest(start, inner.compressedSize, null, null)
+        }
+        // 압축된 안쪽 ZIP은 임시 파일로 풀어 둔다
+        val tmp = File.createTempFile("nest", ".zip", tempDir)
+        val ok = withSource { ZipReader.extractToFile(it, inner, tmp) }
+        if (!ok) {
+            tmp.delete()
+            return null
+        }
+        return Nest(0, tmp.length(), FileRange(tmp), tmp)
+    }
+
+    private suspend fun <T> withNest(nest: Nest, block: (RangeSource) -> T): T {
+        nest.file?.let { f -> return withContext(Dispatchers.IO) { block(f) } }
+        return withSource { block(ZipReader.OffsetSource(it, nest.start, nest.size)) }
     }
 
     private suspend fun <T> withSource(block: (RangeSource) -> T): T {
@@ -159,18 +202,7 @@ class ComicBook(
         }
     }
 
-    private fun decode(bytes: ByteArray): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var sample = 1
-        val longest = maxOf(bounds.outWidth, bounds.outHeight)
-        while (longest / (sample * 2) >= maxSide) sample *= 2
-        return BitmapFactory.decodeByteArray(
-            bytes, 0, bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sample },
-        )
-    }
+    private fun decode(bytes: ByteArray): Bitmap? = ImageDecode.decode(bytes, maxSide)
 
     override fun close() {
         scope.cancel()
@@ -178,8 +210,10 @@ class ComicBook(
         val conns = allConnections
         val file = localFile
         localFile = null
+        val nestList = nests.toList()
         Thread {
             runCatching { file?.close() }
+            nestList.forEach { n -> runCatching { n.file?.close() }; runCatching { n.temp?.delete() } }
             runBlocking { conns.forEach { runCatching { it.close() } } }
         }.start()
         bitmaps.evictAll()
