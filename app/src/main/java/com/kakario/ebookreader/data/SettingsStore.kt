@@ -52,6 +52,10 @@ data class AppSettings(
     val indent: Int = 0,
     /** 양쪽 맞춤 (끄면 왼쪽 맞춤) */
     val justify: Boolean = true,
+    /** 글자를 순수 검정/흰색으로 또렷하게 (이잉크에서 테두리가 뭉개지고 깨지는 것 방지) */
+    val crispText: Boolean = true,
+    /** 또렷하게 할 때 진하기 1~5 (클수록 굵고 진함) */
+    val crispLevel: Int = 3,
     /** TXT 잘린 문장 다시 잇기 */
     val txtReflow: Reflow.Mode = Reflow.Mode.AUTO,
     /** TXT 장 제목(제1장·프롤로그 등) 자동으로 찾아 크게 */
@@ -113,6 +117,8 @@ class SettingsStore(context: Context) {
             indent = prefs.getInt("indent", d.indent).coerceIn(0, INDENT_MAX),
             justify = prefs.getBoolean("justify", d.justify),
             txtReflow = enumOf(prefs.getString("txt_reflow", null), d.txtReflow),
+            crispText = prefs.getBoolean("crisp_text", d.crispText),
+            crispLevel = prefs.getInt("crisp_level", d.crispLevel).coerceIn(1, 5),
             txtChapters = prefs.getBoolean("txt_chapters", d.txtChapters),
             marginTop = prefs.getInt("margin_top", d.marginTop).coerceIn(0, MARGIN_MAX),
             marginBottom = prefs.getInt("margin_bottom", d.marginBottom).coerceIn(0, MARGIN_MAX),
@@ -151,6 +157,8 @@ class SettingsStore(context: Context) {
             .putInt("indent", s.indent)
             .putBoolean("justify", s.justify)
             .putString("txt_reflow", s.txtReflow.name)
+            .putBoolean("crisp_text", s.crispText)
+            .putInt("crisp_level", s.crispLevel)
             .putBoolean("txt_chapters", s.txtChapters)
             .putInt("margin_top", s.marginTop)
             .putInt("margin_bottom", s.marginBottom)

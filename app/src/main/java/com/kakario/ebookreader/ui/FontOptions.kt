@@ -17,6 +17,19 @@ import com.kakario.ebookreader.data.SettingsStore
 fun FontOptions(settings: AppSettings, onChange: (AppSettings) -> Unit) {
     val s = settings
     Column {
+        LineToggle(
+            "글자 또렷하게 (흑백)",
+            s.crispText,
+            sub = "글자 가장자리의 회색을 없애 순수 검정으로 그려요. 이잉크에서 글자가 뭉개지거나 계단처럼 깨지는 걸 막아요",
+        ) { onChange(s.copy(crispText = it)) }
+        if (s.crispText) {
+            LineChoices(
+                label = "또렷하게 진하기",
+                options = listOf(1, 2, 3, 4, 5),
+                selected = s.crispLevel,
+                text = { "$it" },
+            ) { onChange(s.copy(crispLevel = it)) }
+        }
         LineChoices(
             label = "TXT 잘린 문장 잇기",
             options = Reflow.Mode.entries,

@@ -50,6 +50,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import com.kakario.ebookreader.viewer.PageSpan
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmapConfig
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -478,7 +485,17 @@ private fun TextPages(
         } else when (sp) {
             null -> Spinner(Modifier.align(Alignment.Center))
 
-            is SectionPages.Text -> {
+            is SectionPages.Text -> if (settings.crispText) {
+                CrispTextPage(
+                    pages = sp,
+                    span = sp.pages[l!!.page.coerceIn(0, sp.pages.size - 1)],
+                    size = viewSize,
+                    leftPx = leftPx,
+                    topPx = topPx,
+                    strokePx = strokePx,
+                    threshold = 85 + settings.crispLevel * 25,
+                )
+            } else {
                 val span = sp.pages[l!!.page.coerceIn(0, sp.pages.size - 1)]
                 Canvas(Modifier.fillMaxSize()) {
                     val pageHeight = span.bottom - span.top
@@ -660,6 +677,68 @@ private fun TextOverlay(
         if (tocOpen) {
             TocPanel(toc, tocIndex, onPick = { tocOpen = false; onToc(it) }, onClose = { tocOpen = false })
         }
+    }
+}
+
+/**
+ * 글자 페이지를 '순수 검정/흰색'으로 그린다.
+ * 보통 글자는 가장자리가 회색으로 부드럽게 칠해지는데(안티앨리어싱), 이잉크가 빠른 화면 모드로
+ * 그 회색을 점점이 흩뿌리면 글자가 뭉개지고 계단처럼 깨져 보인다.
+ * 그래서 한 장을 그림으로 먼저 그린 뒤, 기준(threshold)보다 어두운 점은 검정, 나머지는 흰색으로 바꾼다.
+ * 기준이 높을수록 회색 가장자리까지 검정이 되어 글자가 굵고 진해진다.
+ */
+@Composable
+private fun CrispTextPage(
+    pages: SectionPages.Text,
+    span: PageSpan,
+    size: IntSize,
+    leftPx: Int,
+    topPx: Int,
+    strokePx: Float,
+    threshold: Int,
+) {
+    val density = LocalDensity.current
+    val dir = LocalLayoutDirection.current
+    val image by produceState<ImageBitmap?>(null, pages, span, size, leftPx, topPx, strokePx, threshold) {
+        if (size.width <= 0 || size.height <= 0) return@produceState
+        // 1) 글자 그리기 (화면과 같은 곳에서)
+        val img = ImageBitmap(size.width, size.height, ImageBitmapConfig.Argb8888)
+        CanvasDrawScope().draw(density, dir, androidx.compose.ui.graphics.Canvas(img), Size(size.width.toFloat(), size.height.toFloat())) {
+            drawRect(Paper)
+            val pageHeight = span.bottom - span.top
+            val topLeft = Offset(leftPx.toFloat(), topPx - span.top)
+            clipRect(top = topPx - strokePx, bottom = topPx + pageHeight + strokePx) {
+                drawText(textLayoutResult = pages.layout, topLeft = topLeft)
+                if (strokePx > 0f) {
+                    drawText(
+                        textLayoutResult = pages.layout,
+                        topLeft = topLeft,
+                        drawStyle = Stroke(width = strokePx, join = StrokeJoin.Round),
+                    )
+                }
+            }
+        }
+        // 2) 회색 → 검정 또는 흰색
+        value = withContext(Dispatchers.Default) {
+            val bmp = img.asAndroidBitmap()
+            val w = bmp.width
+            val h = bmp.height
+            val px = IntArray(w * h)
+            bmp.getPixels(px, 0, w, 0, 0, w, h)
+            val black = 0xFF000000.toInt()
+            val white = 0xFFFFFFFF.toInt()
+            val t = threshold * 1000
+            for (i in px.indices) {
+                val c = px[i]
+                val lum = ((c shr 16) and 0xFF) * 299 + ((c shr 8) and 0xFF) * 587 + (c and 0xFF) * 114
+                px[i] = if (lum < t) black else white
+            }
+            bmp.setPixels(px, 0, w, 0, 0, w, h)
+            img
+        }
+    }
+    image?.let { im ->
+        Canvas(Modifier.fillMaxSize()) { drawImage(im, filterQuality = FilterQuality.None) }
     }
 }
 
