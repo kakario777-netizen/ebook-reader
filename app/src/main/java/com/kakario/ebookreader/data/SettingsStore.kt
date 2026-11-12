@@ -53,7 +53,7 @@ data class AppSettings(
     /** 양쪽 맞춤 (끄면 왼쪽 맞춤) */
     val justify: Boolean = true,
     /** 글자를 순수 검정/흰색으로 또렷하게 (이잉크에서 테두리가 뭉개지고 깨지는 것 방지) */
-    val crispText: Boolean = true,
+    val crispText: Boolean = false,
     /** 또렷하게 할 때 진하기 1~5 (클수록 굵고 진함) */
     val crispLevel: Int = 3,
     /** TXT 잘린 문장 다시 잇기 */
@@ -117,7 +117,7 @@ class SettingsStore(context: Context) {
             indent = prefs.getInt("indent", d.indent).coerceIn(0, INDENT_MAX),
             justify = prefs.getBoolean("justify", d.justify),
             txtReflow = enumOf(prefs.getString("txt_reflow", null), d.txtReflow),
-            crispText = prefs.getBoolean("crisp_text", d.crispText),
+            crispText = prefs.getBoolean("crisp_text2", d.crispText),
             crispLevel = prefs.getInt("crisp_level", d.crispLevel).coerceIn(1, 5),
             txtChapters = prefs.getBoolean("txt_chapters", d.txtChapters),
             marginTop = prefs.getInt("margin_top", d.marginTop).coerceIn(0, MARGIN_MAX),
@@ -157,7 +157,7 @@ class SettingsStore(context: Context) {
             .putInt("indent", s.indent)
             .putBoolean("justify", s.justify)
             .putString("txt_reflow", s.txtReflow.name)
-            .putBoolean("crisp_text", s.crispText)
+            .putBoolean("crisp_text2", s.crispText)
             .putInt("crisp_level", s.crispLevel)
             .putBoolean("txt_chapters", s.txtChapters)
             .putInt("margin_top", s.marginTop)

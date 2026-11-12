@@ -55,6 +55,7 @@ import com.kakario.ebookreader.model.folderName
 import com.kakario.ebookreader.thumb.ThumbnailLoader
 import androidx.compose.runtime.collectAsState
 import com.kakario.ebookreader.ui.AppFonts
+import com.kakario.ebookreader.ui.EinkDevice
 import com.kakario.ebookreader.ui.UpdateDialog
 import com.kakario.ebookreader.update.Updater
 import com.kakario.ebookreader.ui.FavoritesScreen
@@ -295,6 +296,13 @@ class MainActivity : ComponentActivity() {
                                 null -> LaunchedEffect(Unit) { openBook = null }
                             }
                         }
+                    }
+
+                    // 오닉스 계열 기기면 앱 화면 전체를 기기 기본 뷰어처럼 고화질(Regal) 모드로
+                    val rootView = androidx.compose.ui.platform.LocalView.current
+                    DisposableEffect(rootView, settings.deviceRefresh) {
+                        if (settings.deviceRefresh) EinkDevice.applyReadingMode(rootView) else EinkDevice.resetMode(rootView)
+                        onDispose { EinkDevice.resetMode(rootView) }
                     }
 
                     // 맨 위: 이잉크 새로고침 깜빡임

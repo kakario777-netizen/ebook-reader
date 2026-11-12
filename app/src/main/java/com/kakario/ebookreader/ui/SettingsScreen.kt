@@ -99,10 +99,10 @@ fun SettingsScreen(
                 text = { String.format("%.1f초", it / 1000f) },
             ) { onChange(s.copy(fullMs = it)) }
             LineToggle(
-                "기기 자체 새로고침도 쓰기",
+                "기기 고화질 모드 쓰기 (오닉스·sam)",
                 s.deviceRefresh,
-                sub = if (EinkDevice.supported) "이 기기는 지원해요 — 전체 새로고침 때 함께 불러요"
-                else "이 기기에서는 찾지 못했어요 (켜 둬도 괜찮아요)",
+                sub = if (EinkDevice.supported) "이 기기는 지원해요 — 기기 기본 뷰어처럼 Regal 모드로 그리고, 전체 새로고침도 기기가 해요"
+                else "이 기기에서는 쓸 수 없어요 — 앱이 직접 깜빡여 새로고침해요",
             ) { onChange(s.copy(deviceRefresh = it)) }
             LineToggle(
                 "목록·화면이 바뀔 때도",

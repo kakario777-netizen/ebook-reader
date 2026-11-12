@@ -59,6 +59,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // 오닉스 이잉크 화면 제어 (다른 기기에서는 아무 일도 안 함)
+    implementation("com.onyx.android.sdk:onyxsdk-base:1.7.7") { isTransitive = false }
+    implementation("com.onyx.android.sdk:onyxsdk-device:1.2.31") { isTransitive = false }
+    implementation("io.reactivex.rxjava2:rxjava:2.2.21")
+    implementation("io.reactivex.rxjava2:rxandroid:2.1.1")
     // FTP 접속 라이브러리 (Apache Commons Net)
     implementation("commons-net:commons-net:3.11.1")
 }

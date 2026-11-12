@@ -58,6 +58,8 @@ class Refresher {
             fire(full = true, rects = null, ms = settings.fullMs.toLong())
             return
         }
+        // 기기가 고화질(Regal) 모드로 그리는 중이면 매 페이지는 기기에 맡긴다 (기본 뷰어와 같은 방식)
+        if (EinkDevice.active && settings.deviceRefresh) return
         when (settings.lightRefresh) {
             LightRefresh.OFF -> {}
             LightRefresh.TEXT -> if (!textRects.isNullOrEmpty()) {
@@ -102,17 +104,16 @@ fun RefreshOverlay(refresher: Refresher) {
         val fl = f ?: return@LaunchedEffect
         try {
             when {
+                // 오닉스 기기: 직접 칠하지 않고 기기 자체 전체 새로고침
+                fl.full && EinkDevice.active && refresher.deviceRefresh -> {
+                    EinkDevice.fullRefresh(view)
+                }
                 fl.full -> {
                     paint = Paint.Fill(Ink)
                     delay(fl.ms)
                     paint = Paint.Fill(Paper)
                     delay((fl.ms / 3).coerceAtLeast(60))
                     paint = null
-                    // 화면이 다 그려진 뒤 기기 자체 전체 새로고침 (지원 기기만, 아니면 아무 일 없음)
-                    if (refresher.deviceRefresh) {
-                        delay(16)
-                        EinkDevice.fullRefresh(view)
-                    }
                 }
                 fl.white -> {
                     paint = Paint.Fill(Paper)
@@ -137,24 +138,45 @@ fun RefreshOverlay(refresher: Refresher) {
 }
 
 /**
- * 기기 자체 이잉크 새로고침 부르기.
- * 일부 이잉크 기기(오닉스 BOOX 계열 등)는 앱이 '전체 새로고침(GC)'을 요청할 수 있는 숨은 기능이 있다.
- * 기능이 없는 기기에서는 조용히 아무것도 하지 않는다.
+ * 오닉스(BOOX) 계열 이잉크 기기 제어 — sam 10 Plus처럼 NeoReader가 들어 있는 기기.
+ * 기기 기본 뷰어와 같은 방식으로 그리도록 앱 화면 전체를 'Regal(고화질)' 모드로 요청하고,
+ * 전체 새로고침은 기기 자체 GC(진하게 한 번 번쩍)로 한다.
+ * 오닉스가 아닌 기기에서는 요청이 거절되어 아무 일도 일어나지 않는다 (그때는 앱이 직접 칠하는 방식).
  */
 object EinkDevice {
-    private val onyx: Pair<java.lang.reflect.Method, Any>? by lazy {
-        runCatching {
-            val controller = Class.forName("com.onyx.android.sdk.api.device.epd.EpdController")
-            val modeClass = Class.forName("com.onyx.android.sdk.api.device.epd.UpdateMode")
-            val gc = modeClass.enumConstants?.firstOrNull { (it as Enum<*>).name == "GC" } ?: return@runCatching null
-            controller.getMethod("invalidate", View::class.java, modeClass) to gc
-        }.getOrNull()
+    /** 기기가 고화질 모드 요청을 받아들였는지 (받아들였으면 앱이 직접 깜빡이지 않는다). */
+    @Volatile var active: Boolean = false
+        private set
+
+    /** 예전 설정 화면 호환: 기기 제어가 되는지. */
+    val supported: Boolean get() = active
+
+    private fun mode(vararg names: String): com.onyx.android.sdk.api.device.epd.UpdateMode? {
+        val all = com.onyx.android.sdk.api.device.epd.UpdateMode.values()
+        for (n in names) all.firstOrNull { it.name == n }?.let { return it }
+        return null
     }
 
-    val supported: Boolean get() = onyx != null
+    /** 화면 전체를 책 읽기용 고화질 모드로. 성공하면 true. */
+    fun applyReadingMode(view: View): Boolean {
+        val ok = runCatching {
+            val m = mode("REGAL", "REGAL_D", "GU", "GC") ?: return@runCatching false
+            com.onyx.android.sdk.api.device.epd.EpdController.setViewDefaultUpdateMode(view, m)
+        }.getOrDefault(false)
+        active = ok
+        return ok
+    }
 
+    fun resetMode(view: View) {
+        runCatching { com.onyx.android.sdk.api.device.epd.EpdController.resetViewUpdateMode(view) }
+        active = false
+    }
+
+    /** 기기 자체 전체 새로고침 (진하게 한 번 번쩍여 잔상 지우기). */
     fun fullRefresh(view: View) {
-        val (method, gc) = onyx ?: return
-        runCatching { method.invoke(null, view, gc) }
+        runCatching {
+            val m = mode("GC", "GC4") ?: return@runCatching
+            com.onyx.android.sdk.api.device.epd.EpdController.invalidate(view, m)
+        }
     }
 }
