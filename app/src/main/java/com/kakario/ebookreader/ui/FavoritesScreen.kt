@@ -1,7 +1,9 @@
 package com.kakario.ebookreader.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kakario.ebookreader.book.Origin
@@ -35,6 +38,7 @@ import com.kakario.ebookreader.data.FtpServer
 import com.kakario.ebookreader.data.ProgressStore
 import com.kakario.ebookreader.data.ShelfBook
 import com.kakario.ebookreader.model.titleOf
+import com.kakario.ebookreader.update.Updater
 
 /**
  * 첫 화면: 위쪽은 책장(꽂아 둔 책을 책 모양으로), 아래쪽은 즐겨찾기 폴더.
@@ -179,6 +183,33 @@ fun FavoritesScreen(
                     }
                     Line()
                 }
+            }
+        }
+
+        // 맨 아래 오른쪽: 버전·빌드 + 업데이트 확인
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            val ver = remember {
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
+            }
+            val build = remember { Updater.get(context).currentBuild }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 28.dp, end = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "이북리더 v$ver · 빌드 #$build",
+                    color = Ink,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "업데이트 확인",
+                    color = Ink,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable(onClick = onCheckUpdate).padding(horizontal = 10.dp, vertical = 10.dp),
+                )
             }
         }
     }
