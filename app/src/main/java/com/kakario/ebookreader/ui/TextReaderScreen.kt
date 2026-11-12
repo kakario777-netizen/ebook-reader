@@ -130,7 +130,7 @@ fun TextReaderScreen(
     var retry by remember { mutableIntStateOf(0) }
 
     // TXT는 '잘린 문장 잇기' 설정이 바뀌면 다시 읽는다
-    val reflowKey = if (entry.kind == BookKind.TXT) "${settings.txtReflow}/${settings.txtChapters}" else null
+    val reflowKey = if (entry.kind == BookKind.TXT) "${settings.txtReflow}/${settings.txtChapters}/${settings.sentencePerLine}" else null
     LaunchedEffect(retry, reflowKey) {
         error = null
         var ftp: FtpBrowser? = null
@@ -145,7 +145,7 @@ fun TextReaderScreen(
                     TextContent.loadEpub(file)
                         ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
                 } else {
-                    TextContent.loadTxt(file, settings.txtReflow, settings.txtChapters)
+                    TextContent.loadTxt(file, settings.txtReflow, settings.txtChapters, settings.sentencePerLine)
                 }
             }
             if (c.sections.isEmpty()) {

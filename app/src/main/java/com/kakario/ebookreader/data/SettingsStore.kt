@@ -52,6 +52,8 @@ data class AppSettings(
     val crispLevel: Int = 3,
     /** TXT 잘린 문장 다시 잇기 */
     val txtReflow: Reflow.Mode = Reflow.Mode.AUTO,
+    /** TXT 보기: false = 기본(문단), true = 문장마다 줄바꿈 */
+    val sentencePerLine: Boolean = false,
     /** TXT 장 제목(제1장·프롤로그 등) 자동으로 찾아 크게 */
     val txtChapters: Boolean = true,
     /** 여백 (dp) */
@@ -115,6 +117,7 @@ class SettingsStore(context: Context) {
             indent = prefs.getInt("indent", d.indent).coerceIn(0, INDENT_MAX),
             justify = prefs.getBoolean("justify", d.justify),
             txtReflow = enumOf(prefs.getString("txt_reflow", null), d.txtReflow),
+            sentencePerLine = prefs.getBoolean("sentence_per_line", d.sentencePerLine),
             crispText = prefs.getBoolean("crisp_text2", d.crispText),
             crispLevel = prefs.getInt("crisp_level", d.crispLevel).coerceIn(1, 5),
             txtChapters = prefs.getBoolean("txt_chapters", d.txtChapters),
@@ -155,6 +158,7 @@ class SettingsStore(context: Context) {
             .putInt("indent", s.indent)
             .putBoolean("justify", s.justify)
             .putString("txt_reflow", s.txtReflow.name)
+            .putBoolean("sentence_per_line", s.sentencePerLine)
             .putBoolean("crisp_text2", s.crispText)
             .putInt("crisp_level", s.crispLevel)
             .putBoolean("txt_chapters", s.txtChapters)

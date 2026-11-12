@@ -172,10 +172,21 @@ class TextContent(
         }
 
         /** TXT 파일 → 내용. 줄 하나가 문단 하나 (잘린 문장은 reflow 설정에 따라 다시 잇는다). */
-        fun loadTxt(file: File, reflow: Reflow.Mode = Reflow.Mode.AUTO, chapters: Boolean = true): TextContent {
+        fun loadTxt(
+            file: File,
+            reflow: Reflow.Mode = Reflow.Mode.AUTO,
+            chapters: Boolean = true,
+            sentencePerLine: Boolean = false,
+        ): TextContent {
             val text = TextDecode.decodeText(file.readBytes())
             val result = Reflow.process(text.split('\n'), reflow)
-            val paras = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
+            val paras0 = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
+            // '문장마다 줄바꿈': 제목·장면 전환은 그대로, 본문 문단만 문장마다 나눈다
+            val paras = if (!sentencePerLine) paras0 else paras0.flatMap { p ->
+                val t = p.trim()
+                if (t.isEmpty() || t.length < 25 || Chapters.looksLikeTitle(t) || Chapters.isSceneBreak(t)) listOf(p)
+                else Reflow.splitSentences(t)
+            }
             val blocks = if (chapters) Chapters.mark(paras) else paras.map { Html.Block.Para(it) }
             val tidy = Html.tidy(blocks)
             return build(file.nameWithoutExtension, listOf(tidy), images = { null }).also { it.reflowed = result.reflowed }

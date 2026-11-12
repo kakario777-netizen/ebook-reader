@@ -163,5 +163,43 @@ object Reflow {
         return Result(out, true)
     }
 
+    /**
+     * 문단을 문장마다 나눈다 ('문장마다 줄바꿈' 보기).
+     * …다. / …요? / …! / …… 뒤(닫는 따옴표·괄호까지 포함)에서 자른다.
+     * '3.5', 'A.B' 같은 숫자·영문 점이나 '...?!'처럼 이어진 부호 중간에서는 자르지 않는다.
+     */
+    fun splitSentences(p: String): List<String> {
+        if (p.length < 2) return listOf(p)
+        val out = ArrayList<String>()
+        var start = 0
+        var i = 0
+        val n = p.length
+        while (i < n) {
+            val c = p[i]
+            if (c == '.' || c == '!' || c == '?' || c == '…' || c == '。') {
+                // 부호가 이어지면 끝까지
+                var j = i
+                while (j + 1 < n && p[j + 1] in ".!?…。~") j++
+                // 닫는 따옴표·괄호까지 포함
+                while (j + 1 < n && p[j + 1] in "\"'”’」』)）]】") j++
+                val before = if (i > 0) p[i - 1] else ' '
+                val next = p.getOrNull(j + 1)
+                val numberDot = c == '.' && before.isDigit() && next != null && next.isDigit()
+                val latinDot = c == '.' && before.isLetter() && before.code < 128 && next != null && next.isLetter() && next.code < 128
+                if (!numberDot && !latinDot && next != null) {
+                    val piece = p.substring(start, j + 1).trim()
+                    if (piece.isNotEmpty()) out += piece
+                    start = j + 1
+                }
+                i = j + 1
+                continue
+            }
+            i++
+        }
+        val rest = p.substring(start).trim()
+        if (rest.isNotEmpty()) out += rest
+        return if (out.isEmpty()) listOf(p) else out
+    }
+
     private fun isSpace(c: Char): Boolean = c == ' ' || c == '　' || c == ' ' || c == '\t'
 }

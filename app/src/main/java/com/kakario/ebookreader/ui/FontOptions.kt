@@ -44,6 +44,12 @@ fun FontOptions(settings: AppSettings, onChange: (AppSettings) -> Unit) {
             selected = s.txtReflow,
             text = { it.label },
         ) { onChange(s.copy(txtReflow = it)) }
+        LineChoices(
+            label = "TXT 보기",
+            options = listOf(false, true),
+            selected = s.sentencePerLine,
+            text = { if (it) "문장마다 줄바꿈" else "기본 보기" },
+        ) { onChange(s.copy(sentencePerLine = it)) }
         Text(
             "줄마다 엔터로 끊어 둔 TXT를 알아보고 문장을 다시 이어요. 자동은 잘린 파일일 때만 이어요.",
             color = Ink,
