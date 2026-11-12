@@ -58,7 +58,7 @@ fun rememberCover(origin: Origin, entry: FileEntry): Bitmap? {
  * title이 null이면 목록용 작은 크기 (제목 없이 형식만).
  */
 @Composable
-fun BookFace(origin: Origin, entry: FileEntry, modifier: Modifier = Modifier, title: String? = null) {
+fun BookFace(origin: Origin, entry: FileEntry, modifier: Modifier = Modifier, title: String? = null, compact: Boolean = false) {
     val cover = rememberCover(origin, entry)
     val big = title != null
     val edge: Dp = if (big) 5.dp else 3.dp
@@ -112,7 +112,7 @@ fun BookFace(origin: Origin, entry: FileEntry, modifier: Modifier = Modifier, ti
                     Text(
                         title.orEmpty(),
                         color = Ink,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                         maxLines = 4,

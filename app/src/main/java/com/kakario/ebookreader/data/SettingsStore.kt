@@ -80,7 +80,7 @@ data class AppSettings(
     /** 앱 글자 크기 % */
     val uiScale: Int = 105,
     /** 책장 한 줄 권수 */
-    val shelfColumns: Int = 3,
+    val shelfColumns: Int = 6,
     /** 보는 중 화면 아래에 시간·진행률 표시 */
     val showInfoBar: Boolean = true,
     /** 볼륨 버튼으로 넘기기 (페이지 터너 키는 항상 동작) */
@@ -132,7 +132,7 @@ class SettingsStore(context: Context) {
 
             uiWeight = prefs.getInt("ui_weight2", d.uiWeight).coerceIn(0, 3),
             uiScale = prefs.getInt("ui_scale", d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
-            shelfColumns = prefs.getInt("shelf_columns", d.shelfColumns).coerceIn(2, 6),
+            shelfColumns = prefs.getInt("shelf_columns2", d.shelfColumns).coerceIn(SHELF_MIN, SHELF_MAX),
             showInfoBar = prefs.getBoolean("info_bar", d.showInfoBar),
             volumeKeys = prefs.getBoolean("volume_keys", d.volumeKeys),
             listCovers = prefs.getBoolean("list_covers", d.listCovers),
@@ -170,7 +170,7 @@ class SettingsStore(context: Context) {
             .putBoolean("refresh_screens", s.refreshOnScreens)
             .putInt("ui_weight2", s.uiWeight)
             .putInt("ui_scale", s.uiScale)
-            .putInt("shelf_columns", s.shelfColumns)
+            .putInt("shelf_columns2", s.shelfColumns)
             .putBoolean("info_bar", s.showInfoBar)
             .putBoolean("volume_keys", s.volumeKeys)
             .putBoolean("list_covers", s.listCovers)
@@ -192,6 +192,8 @@ class SettingsStore(context: Context) {
         const val LETTER_MAX = 30
         const val INDENT_MAX = 4
         const val MARGIN_MAX = 80
+        const val SHELF_MIN = 3
+        const val SHELF_MAX = 10
         const val UI_SCALE_MIN = 85
         const val UI_SCALE_MAX = 140
 

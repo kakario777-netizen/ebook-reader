@@ -176,8 +176,8 @@ fun SettingsScreen(
             LineStepper(
                 "책장 한 줄 권수",
                 "${s.shelfColumns}권",
-                onMinus = { onChange(s.copy(shelfColumns = (s.shelfColumns - 1).coerceAtLeast(2))) },
-                onPlus = { onChange(s.copy(shelfColumns = (s.shelfColumns + 1).coerceAtMost(6))) },
+                onMinus = { onChange(s.copy(shelfColumns = (s.shelfColumns - 1).coerceAtLeast(SettingsStore.SHELF_MIN))) },
+                onPlus = { onChange(s.copy(shelfColumns = (s.shelfColumns + 1).coerceAtMost(SettingsStore.SHELF_MAX))) },
             )
             LineToggle("목록에 표지 보이기", s.listCovers, sub = "끄면 글자만 보여요") {
                 onChange(s.copy(listCovers = it))

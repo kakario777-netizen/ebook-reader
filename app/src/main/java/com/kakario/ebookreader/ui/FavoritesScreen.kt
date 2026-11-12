@@ -36,6 +36,7 @@ import com.kakario.ebookreader.book.Origin
 import com.kakario.ebookreader.data.Favorite
 import com.kakario.ebookreader.data.FtpServer
 import com.kakario.ebookreader.data.ProgressStore
+import com.kakario.ebookreader.data.SettingsStore
 import com.kakario.ebookreader.data.ShelfBook
 import com.kakario.ebookreader.model.titleOf
 import com.kakario.ebookreader.update.Updater
@@ -50,6 +51,7 @@ fun FavoritesScreen(
     servers: List<FtpServer>,
     shelf: Shelf,
     columns: Int,
+    onColumnsChange: (Int) -> Unit,
     onCheckUpdate: () -> Unit,
     onOpen: (Favorite) -> Unit,
     onRemove: (Favorite) -> Unit,
@@ -77,7 +79,15 @@ fun FavoritesScreen(
                     title = "책장",
                     subtitle = if (books.isEmpty()) null else "${books.size}권 · 길게 누르면 뺄 수 있어요",
                     onBack = null,
-                    actions = { LineButton("새 버전 확인", modifier = Modifier.padding(end = 12.dp), onClick = onCheckUpdate) },
+                    actions = {
+                        // 책 크기: 작게(한 줄에 더 많이) / 크게
+                        LineButton("작게", modifier = Modifier.padding(end = 6.dp), enabled = columns < SettingsStore.SHELF_MAX) {
+                            onColumnsChange(columns + 1)
+                        }
+                        LineButton("크게", modifier = Modifier.padding(end = 12.dp), enabled = columns > SettingsStore.SHELF_MIN) {
+                            onColumnsChange(columns - 1)
+                        }
+                    },
                 )
                 Line()
             }
@@ -98,12 +108,13 @@ fun FavoritesScreen(
                 Column(
                     Modifier
                         .combinedClickable(onClick = { onOpenBook(origin, book) }, onLongClick = { bookMenu = book })
-                        .padding(horizontal = 10.dp, vertical = 14.dp),
+                        .padding(horizontal = if (columns >= 5) 6.dp else 10.dp, vertical = if (columns >= 5) 8.dp else 14.dp),
                 ) {
                     BookFace(
                         origin = origin,
                         entry = entry,
                         title = titleOf(book.name),
+                        compact = columns >= 5,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.68f),
                     )
                     Spacer(Modifier.height(8.dp))

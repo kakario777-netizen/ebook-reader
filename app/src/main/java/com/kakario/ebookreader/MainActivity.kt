@@ -206,6 +206,7 @@ class MainActivity : ComponentActivity() {
                                         shelf = shelf,
                                         onCheckUpdate = { updater.check(quiet = false) },
                                         columns = settings.shelfColumns,
+                                        onColumnsChange = { changeSettings(settings.copy(shelfColumns = it)) },
                                         onOpenBook = { origin, b ->
                                             val e = b.toEntry()
                                             openBook = OpenBook(origin, e, listOf(e))
