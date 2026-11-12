@@ -157,8 +157,24 @@ object EinkDevice {
         return null
     }
 
+    /**
+     * 기기 빠른 설정의 'A2 모드'(빠르지만 회색을 못 쓰는 모드)를 이 앱에서만 끈다.
+     * 기기 기본 뷰어처럼 A2가 켜져 있어도 우리 앱은 고화질로 그리게 하려는 것.
+     * 오닉스 도구 버전에 따라 이름이 달라서 있는 것을 찾아 부르고, 없으면 조용히 넘어간다.
+     */
+    private fun disableFastMode(view: View) {
+        val c = com.onyx.android.sdk.api.device.epd.EpdController::class.java
+        val pkg = view.context.packageName
+        val z = java.lang.Boolean.TYPE
+        runCatching { c.getMethod("clearApplicationFastMode").invoke(null) }
+        runCatching { c.getMethod("applyApplicationFastMode", String::class.java, z, z).invoke(null, pkg, false, true) }
+        runCatching { c.getMethod("disableA2ForSpecificView", View::class.java).invoke(null, view) }
+        runCatching { c.getMethod("setAppScopeRefreshMode", String::class.java, Int::class.javaPrimitiveType).invoke(null, pkg, 0) }
+    }
+
     /** 화면 전체를 책 읽기용 고화질 모드로. 성공하면 true. */
     fun applyReadingMode(view: View): Boolean {
+        disableFastMode(view)
         val ok = runCatching {
             val m = mode("REGAL", "REGAL_D", "GU", "GC") ?: return@runCatching false
             com.onyx.android.sdk.api.device.epd.EpdController.setViewDefaultUpdateMode(view, m)
