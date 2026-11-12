@@ -9,13 +9,6 @@ enum class ComicLayout(val label: String, val short: String) {
     SINGLE_PORTRAIT("한 장 · 세로 고정", "한 장"),
 }
 
-/** 글자 책 글꼴. */
-enum class ReaderFont(val label: String) {
-    GOTHIC("고딕"),
-    SERIF("명조"),
-    SYSTEM("기기 글꼴"),
-}
-
 /** 페이지마다 하는 가벼운 새로고침. */
 enum class LightRefresh(val label: String) {
     TEXT("글자 줄만"),
@@ -37,7 +30,8 @@ data class AppSettings(
     val prefetchPages: Int = 6,
 
     // ── 글자 책 (TXT·EPUB)
-    val readerFont: ReaderFont = ReaderFont.GOTHIC,
+    /** 글자 책 글꼴 (FontCatalog의 id) */
+    val readerFont: String = "noto-sans-kr",
     /** 글자 크기 (sp) */
     val fontSize: Int = 20,
     /** 글꼴 굵기 100~900 (400 보통, 700 굵게) */
@@ -108,7 +102,11 @@ class SettingsStore(context: Context) {
             ftpConnections = prefs.getInt("ftp_connections", d.ftpConnections).coerceIn(1, 4),
             prefetchPages = prefs.getInt("prefetch_pages", d.prefetchPages).coerceIn(2, 12),
 
-            readerFont = enumOf(prefs.getString("reader_font2", null), d.readerFont),
+            readerFont = prefs.getString("reader_font_id", null) ?: when (prefs.getString("reader_font2", null)) {
+                "SERIF" -> "nanum-myeongjo"
+                "SYSTEM" -> "system"
+                else -> d.readerFont
+            },
             fontSize = prefs.getInt("font_size", d.fontSize).coerceIn(FONT_MIN, FONT_MAX),
             fontWeight = prefs.getInt("font_weight2", d.fontWeight).coerceIn(WEIGHT_MIN, WEIGHT_MAX),
             strokeBoost = prefs.getInt("stroke_boost", d.strokeBoost).coerceIn(0, STROKE_MAX),
@@ -148,7 +146,7 @@ class SettingsStore(context: Context) {
             .putBoolean("slide_animation", s.slideAnimation)
             .putInt("ftp_connections", s.ftpConnections)
             .putInt("prefetch_pages", s.prefetchPages)
-            .putString("reader_font2", s.readerFont.name)
+            .putString("reader_font_id", s.readerFont)
             .putInt("font_size", s.fontSize)
             .putInt("font_weight2", s.fontWeight)
             .putInt("stroke_boost", s.strokeBoost)

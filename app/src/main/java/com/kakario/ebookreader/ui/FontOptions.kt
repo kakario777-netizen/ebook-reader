@@ -2,6 +2,15 @@ package com.kakario.ebookreader.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.kakario.ebookreader.book.Reflow
@@ -9,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kakario.ebookreader.data.AppSettings
-import com.kakario.ebookreader.data.ReaderFont
 import com.kakario.ebookreader.data.SettingsStore
 
 /** 글자 책 글꼴 세부 설정 — 설정 화면과 책 보는 중 메뉴에서 같이 쓴다. */
@@ -48,12 +56,30 @@ fun FontOptions(settings: AppSettings, onChange: (AppSettings) -> Unit) {
             sub = "제1장·12화·프롤로그 같은 줄을 찾아 새 페이지 맨 위에 크게 보여주고 목차를 만들어요 (파일은 그대로)",
         ) { onChange(s.copy(txtChapters = it)) }
 
-        LineChoices(
-            label = "글꼴",
-            options = ReaderFont.entries,
-            selected = s.readerFont,
-            text = { it.label },
-        ) { onChange(s.copy(readerFont = it)) }
+        // 글꼴: 기본 버튼 + 다른 글꼴 목록(샘플 문장으로 보고 고르기)
+        var picker by remember { mutableStateOf(false) }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
+            Text("글꼴", color = Ink, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val isDefault = s.readerFont == "noto-sans-kr"
+                LineButton("기본 글꼴", bold = isDefault, modifier = Modifier.weight(1f)) {
+                    onChange(s.copy(readerFont = "noto-sans-kr"))
+                }
+                LineButton(
+                    if (isDefault) "다른 글꼴 고르기 ›" else AppFonts.info(s.readerFont).name + " ›",
+                    bold = !isDefault,
+                    modifier = Modifier.weight(1.4f),
+                ) { picker = true }
+            }
+        }
+        if (picker) {
+            FontPicker(
+                selected = s.readerFont,
+                onSelect = { onChange(s.copy(readerFont = it)) },
+                onClose = { picker = false },
+            )
+        }
 
         LineStepper(
             "글자 크기",

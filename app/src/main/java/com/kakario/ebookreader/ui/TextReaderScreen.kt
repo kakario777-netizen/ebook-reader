@@ -261,7 +261,7 @@ private fun TextPages(
     val strokePx = with(density) { (settings.strokeBoost * 0.22f).dp.toPx() }
 
     val style = remember(
-        settings.fontSize, settings.lineSpacing, settings.readerFont, settings.fontWeight,
+        settings.fontSize, settings.lineSpacing, settings.readerFont, settings.fontWeight, AppFonts.version,
         settings.letterSpacing, settings.indent, settings.justify,
     ) {
         TextStyle(

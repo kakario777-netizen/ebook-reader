@@ -82,25 +82,10 @@ class Updater private constructor(private val context: Context) {
                 dir.listFiles()?.forEach { it.delete() }
                 val file = File(dir, "ebook-reader-${release.build}.apk")
                 _state.value = State.Downloading(release, 0)
-                val conn = open(release.apkUrl)
-                val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.size
-                conn.inputStream.use { input ->
-                    file.outputStream().use { out ->
-                        val buf = ByteArray(64 * 1024)
-                        var done = 0L
-                        var lastPct = -1
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            out.write(buf, 0, n)
-                            done += n
-                            val pct = if (total > 0) (done * 100 / total).toInt() else 0
-                            if (pct != lastPct) {
-                                lastPct = pct
-                                _state.value = State.Downloading(release, pct)
-                            }
-                        }
-                    }
+                // 끊겨도 받은 데까지 이어서 다시 받는다 (GitHub 받기가 중간에 멈추는 경우가 많아서)
+                Downloader.fetch(release.apkUrl, file, release.size) { done, total ->
+                    val pct = if (total > 0) (done * 100 / total).toInt() else 0
+                    if ((_state.value as? State.Downloading)?.percent != pct) _state.value = State.Downloading(release, pct)
                 }
                 _state.value = State.Ready(release, file)
                 install(file)
