@@ -25,6 +25,7 @@ import com.kakario.ebookreader.data.ComicLayout
 import com.kakario.ebookreader.data.LightRefresh
 import com.kakario.ebookreader.data.SettingsStore
 import com.kakario.ebookreader.model.formatBytes
+import com.kakario.ebookreader.update.Updater
 
 @Composable
 private fun SubTitle(text: String) {
@@ -191,6 +192,19 @@ fun SettingsScreen(
             Line()
 
             // ───────── 저장공간
+            SectionTitle("앱 정보")
+            Text(
+                "이북리더 빌드 #${Updater.get(context).currentBuild}  ·  켤 때마다 새 버전을 자동으로 확인해요",
+                color = Ink,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            )
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                LineButton("새 버전 확인") { Updater.get(context).check(quiet = false) }
+            }
+            Spacer(Modifier.height(8.dp))
+            Line()
+
             SectionTitle("저장공간")
             val thumbBytes = remember(cacheVersion) { thumbs?.diskCacheBytes() ?: 0L }
             val bookBytes = remember(cacheVersion) { books.sizeBytes() }

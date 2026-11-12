@@ -46,6 +46,7 @@ fun FavoritesScreen(
     servers: List<FtpServer>,
     shelf: Shelf,
     columns: Int,
+    onCheckUpdate: () -> Unit,
     onOpen: (Favorite) -> Unit,
     onRemove: (Favorite) -> Unit,
     onOpenBook: (Origin, ShelfBook) -> Unit,
@@ -72,6 +73,7 @@ fun FavoritesScreen(
                     title = "책장",
                     subtitle = if (books.isEmpty()) null else "${books.size}권 · 길게 누르면 뺄 수 있어요",
                     onBack = null,
+                    actions = { LineButton("새 버전 확인", modifier = Modifier.padding(end = 12.dp), onClick = onCheckUpdate) },
                 )
                 Line()
             }

@@ -53,7 +53,10 @@ import com.kakario.ebookreader.model.BookKind
 import com.kakario.ebookreader.model.FileEntry
 import com.kakario.ebookreader.model.folderName
 import com.kakario.ebookreader.thumb.ThumbnailLoader
+import androidx.compose.runtime.collectAsState
 import com.kakario.ebookreader.ui.AppFonts
+import com.kakario.ebookreader.ui.UpdateDialog
+import com.kakario.ebookreader.update.Updater
 import com.kakario.ebookreader.ui.FavoritesScreen
 import com.kakario.ebookreader.ui.FtpLocation
 import com.kakario.ebookreader.ui.FtpTab
@@ -114,6 +117,10 @@ class MainActivity : ComponentActivity() {
         AppFonts.init(applicationContext)
         val shelf = Shelf(ShelfStore(applicationContext))
         val refresher = Refresher()
+        val updater = Updater.get(applicationContext)
+        // 켤 때마다 조용히 새 버전 확인 (있을 때만 창이 뜸)
+        if (savedInstanceState == null) updater.check(quiet = true)
+        askNotificationPermission()
 
         setContent {
             var settings by remember { mutableStateOf(settingsStore.load()) }
@@ -196,6 +203,7 @@ class MainActivity : ComponentActivity() {
                                         favorites = favorites,
                                         servers = servers,
                                         shelf = shelf,
+                                        onCheckUpdate = { updater.check(quiet = false) },
                                         columns = settings.shelfColumns,
                                         onOpenBook = { origin, b ->
                                             val e = b.toEntry()
@@ -291,10 +299,21 @@ class MainActivity : ComponentActivity() {
 
                     // 맨 위: 이잉크 새로고침 깜빡임
                     RefreshOverlay(refresher)
+
+                    // 업데이트 창 (어느 화면에서든)
+                    val updateState by updater.state.collectAsState()
+                    UpdateDialog(updateState, updater)
                 }
               }
             }
         }
+    }
+
+    /** 업데이트 완료 알림을 띄우려면 안드로이드 13+에서 알림 허용이 필요하다. */
+    private fun askNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
     }
 
     /** 뷰어가 열려 있으면 볼륨 버튼·페이지 터너 입력을 먼저 페이지 넘기기에 쓴다. */
