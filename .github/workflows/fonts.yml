@@ -1,0 +1,42 @@
+# 고를 수 있는 글꼴들을 받아 'fonts' 릴리스에 올린다 (앱이 여기서 골라 받음)
+name: Fonts
+
+on:
+  push:
+    branches: [main]
+    paths: [fonts/fonts.txt, .github/workflows/fonts.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download fonts
+        run: |
+          mkdir -p out
+          ok=""; bad=""
+          while IFS='|' read -r name url; do
+            case "$name" in ''|'#'*) continue;; esac
+            if [[ "$url" == zip:* ]]; then
+              rest="${url#zip:}"; inner="${rest##*:}"; zurl="${rest%:*}"
+              f=""
+              if curl -fsSL --retry 3 -o f.zip "$zurl"; then
+                unzip -o -q f.zip -d z || true
+                f=$(find z -name "$inner" | head -1)
+              fi
+              if [ -n "$f" ]; then mv "$f" "out/$name"; ok="$ok $name"; else bad="$bad $name"; fi
+              rm -rf f.zip z
+            elif curl -fsSL --retry 3 -o "out/$name" "$url"; then ok="$ok $name"; else rm -f "out/$name"; bad="$bad $name"; fi
+          done < fonts/fonts.txt
+          echo "::notice title=fonts-ok::$(cd out && ls -l | awk 'NR>1{printf "%s %s | ", $9, $5}')"
+          [ -n "$bad" ] && echo "::warning title=fonts-missing::$bad" || true
+      - name: Publish 'fonts' release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view fonts >/dev/null 2>&1 || gh release create fonts --title "글꼴 모음" --notes "이북리더 앱이 골라 받는 무료 한글 글꼴(OFL)" --latest=false
+          gh release upload fonts out/* --clobber

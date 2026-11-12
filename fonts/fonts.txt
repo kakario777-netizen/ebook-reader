@@ -1,0 +1,20 @@
+# 앱에서 골라 받을 수 있는 무료 한글 글꼴 (모두 OFL)
+# 형식: 받을_파일이름|주소   (fonts.yml이 받아서 'fonts' 릴리스에 올린다)
+nanumgothic-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Regular.ttf
+nanumgothic-700.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Bold.ttf
+nanumgothic-800.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-ExtraBold.ttf
+gowunbatang-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gowunbatang/GowunBatang-Regular.ttf
+gowunbatang-700.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gowunbatang/GowunBatang-Bold.ttf
+gowundodum-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gowundodum/GowunDodum-Regular.ttf
+ibmplexsanskr-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanskr/IBMPlexSansKR-Regular.ttf
+ibmplexsanskr-500.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanskr/IBMPlexSansKR-Medium.ttf
+ibmplexsanskr-600.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanskr/IBMPlexSansKR-SemiBold.ttf
+ibmplexsanskr-700.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanskr/IBMPlexSansKR-Bold.ttf
+gothica1-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gothica1/GothicA1-Regular.ttf
+gothica1-500.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gothica1/GothicA1-Medium.ttf
+gothica1-600.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gothica1/GothicA1-SemiBold.ttf
+gothica1-700.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/gothica1/GothicA1-Bold.ttf
+hahmlet-var.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/hahmlet/Hahmlet%5Bwght%5D.ttf
+notoserifkr-var.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifkr/NotoSerifKR%5Bwght%5D.ttf
+songmyung-400.ttf|https://raw.githubusercontent.com/google/fonts/main/ofl/songmyung/SongMyung-Regular.ttf
+pretendard-var.ttf|zip:https://github.com/orioncactus/pretendard/releases/download/v1.3.9/Pretendard-1.3.9.zip:PretendardVariable.ttf
