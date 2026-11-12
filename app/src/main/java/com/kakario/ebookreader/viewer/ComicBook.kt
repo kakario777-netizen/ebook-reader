@@ -142,11 +142,11 @@ class ComicBook(
     private suspend fun raw(index: Int, prefetch: Boolean): ByteArray {
         raws.get(index)?.let { return it }
         val job = rawInFlight.getOrPut(index) {
-            scope.async {
+            scope.async<ByteArray> {
                 try {
                     val pg = pages.getOrNull(index) ?: throw UserFacingException("없는 페이지예요")
                     val e = pg.entry
-                    val bytes: ByteArray? = if (pg.nest >= 0) {
+                    val got: ByteArray? = if (pg.nest >= 0) {
                         val nest = nests[pg.nest]
                         if (prefetch && nest.file == null) prefetchGate.withPermit { withNest<ByteArray?>(nest) { ZipReader.extract(it, e) } }
                         else withNest<ByteArray?>(nest) { ZipReader.extract(it, e) }
@@ -154,7 +154,8 @@ class ComicBook(
                         prefetchGate.withPermit { withSource<ByteArray?> { ZipReader.extract(it, e) } }
                     } else {
                         withSource<ByteArray?> { ZipReader.extract(it, e) }
-                    } ?: throw UserFacingException("이 페이지를 읽을 수 없어요 (지원하지 않는 압축 방식)")
+                    }
+                    val bytes: ByteArray = got ?: throw UserFacingException("이 페이지를 읽을 수 없어요 (지원하지 않는 압축 방식)")
                     raws.put(index, bytes)
                     bytes
                 } finally {
