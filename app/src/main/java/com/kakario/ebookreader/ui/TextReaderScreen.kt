@@ -626,18 +626,6 @@ private fun TextOverlay(
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Paper).blockTaps()) {
             Line()
-            if (fontPanel) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = 6.dp),
-                ) {
-                    FontOptions(settings, onSettingsChange)
-                }
-                Line()
-            }
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -671,6 +659,40 @@ private fun TextOverlay(
                         modifier = Modifier.weight(1f),
                     ) { fontPanel = !fontPanel }
                     LineButton("화면 새로고침", modifier = Modifier.weight(1f), onClick = onRefresh)
+                }
+            }
+        }
+        if (fontPanel) {
+            // 글자 설정: 책 위에 겹치지 않도록 화면 전체를 덮는 흰 설정 화면 (닫으면 바뀐 글자로 바로 보임)
+            Column(Modifier.fillMaxSize().background(Paper).blockTaps()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "닫기") { fontPanel = false }
+                    Text("글자 설정", color = Ink, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                }
+                Line()
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 6.dp),
+                ) {
+                    FontOptions(settings, onSettingsChange)
+                }
+                Line()
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(16.dp),
+                ) {
+                    LineButton("닫고 책 보기", bold = true, modifier = Modifier.fillMaxWidth()) { fontPanel = false }
                 }
             }
         }

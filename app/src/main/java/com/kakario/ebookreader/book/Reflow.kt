@@ -42,19 +42,30 @@ object Reflow {
 
         if (mode == Mode.AUTO) {
             if (texts.size < 20 || width < 16) return Result(lines, false)
-            val full = texts.filter { it.trim().length >= width * 0.75 }
-            val fullRatio = full.size.toDouble() / texts.size
-            val openRatio = full.count { !endsSentence(it.trim()) }.toDouble() / full.size.coerceAtLeast(1)
-            // 꽉 찬 줄이 많고, 그 줄들이 문장 중간에서 끊겨 있어야 '잘린 파일'
-            if (fullRatio < 0.4 || openRatio < 0.35) return Result(lines, false)
+            // '꽉 찬 줄인데 문장 중간에서 끝난 줄'이 충분히 많으면 잘린 파일.
+            // (대사처럼 짧은 줄이 많이 섞여 있어도 알아보도록, 전체 줄 수 대비 비율로 본다)
+            val openFull = texts.count { val t = it.trim(); t.length >= width * 0.75 && !endsSentence(t) }
+            if (openFull < 15 || openFull.toDouble() / texts.size < 0.12) return Result(lines, false)
         }
         val w = if (width < 10) 40 else width
 
         // 한 줄 띄워 쓴 파일: 거의 모든 글줄 사이에 빈 줄이 하나씩 → 빈 줄 하나는 무시, 두 개 이상만 문단 구분
         val doubleSpaced = isDoubleSpaced(lines)
 
-        // 글자 수로 강제로 자른 파일인지 (단어 중간에서도 잘림 → 공백 없이 붙여야 함)
-        val exactCut = texts.count { it.trim().length in (w - 1)..(w + 1) }.toDouble() / texts.size > 0.45
+        // 글자(바이트) 수로 강제로 자른 파일인지 → 단어 중간에서도 잘리므로 공백 없이 붙여야 한다.
+        // 이런 파일은 마침 띄어쓰기 자리에서 잘리면 그 공백이 줄 끝/시작에 그대로 남아 있다.
+        // 반대로 단어 단위로 줄을 바꾼 파일은 줄 끝 공백이 거의 없다.
+        var boundaries = 0
+        var edgeSpaces = 0
+        for (k in 0 until rawLines.size - 1) {
+            val a = rawLines[k].trimEnd('\r')
+            val b = rawLines[k + 1].trimEnd('\r')
+            if (a.isBlank() || b.isBlank() || a.trim().length < w * 0.75) continue
+            boundaries++
+            if (a.last() == ' ' || a.last() == '\u3000' || b.first() == ' ' || b.first() == '\u3000') edgeSpaces++
+        }
+        val exactCut = (boundaries >= 10 && edgeSpaces.toDouble() / boundaries >= 0.08) ||
+            texts.count { it.trim().length in (w - 1)..(w + 1) }.toDouble() / texts.size > 0.45
 
         val out = ArrayList<String>()
         val para = StringBuilder()
@@ -101,10 +112,12 @@ object Reflow {
                         para.append(line)
                     }
                     // 줄 앞이나 끝에 공백이 있었으면 단어 경계였던 것
-                    raw.first().isWhitespace() || rawLines.getOrNull(i - 1)?.let { p -> p.isNotEmpty() && p.last().isWhitespace() } == true -> {
+                    rawLines[i].first().isWhitespace() ||
+                        rawLines.getOrNull(i - 1)?.trimEnd('\r')?.let { p -> p.isNotEmpty() && p.last().isWhitespace() } == true -> {
                         para.append(' ').append(line)
                     }
-                    exactCut && isHangul(prev) && isHangul(line.first()) -> para.append(line)
+                    // 강제로 자른 파일: 줄 경계에 공백이 없었으면 단어 중간 → 그대로 붙인다 ("때"+"문에")
+                    exactCut && !prev.isWhitespace() && !line.first().isWhitespace() -> para.append(line)
                     else -> para.append(' ').append(line)
                 }
             }
