@@ -129,7 +129,7 @@ class TextContent(
                 }
                 if (sb.isEmpty() && text.isEmpty()) return // 구간 첫 줄은 빈 줄로 시작하지 않음
                 appendLine(text)
-                if (level > 0 && text.isNotEmpty()) heads += Heading((sb.length - text.length) until sb.length, 2)
+                if (level > 0 && text.isNotEmpty()) heads += Heading((sb.length - text.length) until sb.length, if (level == 4) 4 else 2)
                 if (sb.length >= CHUNK) flushText()
             }
 

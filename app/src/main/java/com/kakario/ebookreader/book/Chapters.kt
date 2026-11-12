@@ -58,13 +58,66 @@ object Chapters {
 
     private enum class Kind { MARK_ONLY, WITH_NAME }
 
+    /** 장면 전환 줄: * * *, ◇◇◇, -----, ======, …… 등 */
+    private val SCENE = Regex("^[\\s*＊◇◆○●□■☆★=\\-~#·.…_+※]{3,}$")
+    /** 번호만 있는 줄: 1, 12., 003) */
+    private val NUMBER_LINE = Regex("^([0-9]{1,4})\\s*[.)]?$")
+    /** 권 표시로 끝나는 줄: '책이름 1권', '책이름 03권 (완)' */
+    private val VOLUME = Regex("[0-9]+\\s*권\\s*(\\(?완\\)?|\\[?완결\\]?)?$")
+
+    fun isSceneBreak(t: String): Boolean {
+        val s = t.trim()
+        return s.length in 3..40 && SCENE.matches(s) && s.any { !it.isWhitespace() }
+    }
+
+    /** 패턴만으로 확실한 장 제목 (줄 잇기에서 이 줄 앞뒤는 잇지 않는다). */
+    fun looksLikeTitle(t: String): Boolean = titleKind(t) != null
+
     /** 문단 목록 → 제목 표시를 붙인 블록 목록. */
     fun mark(paragraphs: List<String>): List<Html.Block> {
-        val out = ArrayList<Html.Block>(paragraphs.size)
+        val n = paragraphs.size
+        fun blank(k: Int) = k < 0 || k >= n || paragraphs[k].isBlank()
+        fun isolated(k: Int) = blank(k - 1) && blank(k + 1)
+
+        // 번호만 있는 줄이 앞뒤가 비어 있고, 1·2·3처럼 차례로 늘어나면 → 장 번호
+        val numbered = HashSet<Int>()
+        run {
+            val found = ArrayList<Pair<Int, Int>>()
+            for (k in 0 until n) {
+                val m = NUMBER_LINE.matchEntire(paragraphs[k].trim()) ?: continue
+                if (isolated(k)) found += k to m.groupValues[1].toInt()
+            }
+            if (found.size >= 3) {
+                val inc = found.zipWithNext().count { (a, b) -> b.second == a.second + 1 }
+                if (inc >= (found.size - 1) * 0.6) found.forEach { numbered += it.first }
+            }
+        }
+        // 같은 꾸밈(- 제목 -, 【제목】, < 제목 >)으로 둘러싼 짧은 줄이 여러 번 나오면 → 장 제목
+        val decoCount = HashMap<String, Int>()
+        for (k in 0 until n) {
+            val t = paragraphs[k].trim()
+            if (t.length in 3..MAX_TITLE && WRAPPED.matches(t) && isolated(k)) {
+                val key = "${t.first()}${t.last()}"
+                decoCount[key] = (decoCount[key] ?: 0) + 1
+            }
+        }
+
+        val out = ArrayList<Html.Block>(n)
         var i = 0
-        while (i < paragraphs.size) {
+        while (i < n) {
             val p = paragraphs[i]
-            val kind = titleKind(p)
+            val t = p.trim()
+            if (t.isNotEmpty() && isSceneBreak(t)) {
+                out += Html.Block.Para(t, level = 4)
+                i++
+                continue
+            }
+            var kind = titleKind(p)
+            if (kind == null && t.isNotEmpty() && t.length <= MAX_TITLE && !SENTENCE.containsMatchIn(t)) {
+                val decorated = WRAPPED.matches(t) && isolated(i) && (decoCount["${t.first()}${t.last()}"] ?: 0) >= 3
+                val volume = VOLUME.containsMatchIn(t) && isolated(i)
+                if (i in numbered || decorated || volume) kind = if (i in numbered) Kind.MARK_ONLY else Kind.WITH_NAME
+            }
             if (kind == null) {
                 out += Html.Block.Para(p)
                 i++
@@ -77,8 +130,9 @@ object Chapters {
                 var j = i
                 if (j < paragraphs.size && paragraphs[j].isBlank()) j++
                 val next = paragraphs.getOrNull(j)?.trim()
-                if (next != null && next.isNotEmpty() && next.length <= MAX_SUB &&
-                    !SENTENCE.containsMatchIn(next) && titleKind(next) == null &&
+                // 부제목은 짧고, 문장이 아니고, 그 뒤가 빈 줄이어야 한다 (본문 첫 줄을 잘못 잡지 않게)
+                if (next != null && next.isNotEmpty() && next.length <= MAX_SUB && blank(j + 1) &&
+                    !SENTENCE.containsMatchIn(next) && titleKind(next) == null && !isSceneBreak(next) &&
                     next.last() !in ".!?…\"”'’"
                 ) {
                     out += Html.Block.Para(next, level = 1, sub = true)

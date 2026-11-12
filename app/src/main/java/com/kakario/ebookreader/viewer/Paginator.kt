@@ -121,6 +121,11 @@ class Paginator(
                             r.first, r.last + 1,
                         )
                     }
+                    // 장면 전환(* * *): 가운데
+                    4 -> addStyle(
+                        ParagraphStyle(textAlign = TextAlign.Center, textIndent = TextIndent.None),
+                        r.first, r.last + 1,
+                    )
                     // 작은 제목: 굵게
                     else -> addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = base * 1.15f), r.first, r.last + 1)
                 }
