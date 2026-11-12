@@ -47,6 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class ThumbnailLoader private constructor(context: Context) {
     private val dir = File(context.cacheDir, "thumbs").apply { mkdirs() }
     private val books = BookCache.get(context)
+    private val sync = com.kakario.ebookreader.data.ServerSync.get(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val memory = object : LruCache<String, Bitmap>(
@@ -108,6 +109,16 @@ class ThumbnailLoader private constructor(context: Context) {
             return it
         }
         paused.first { !it }
+        // FTP 책: 다른 기기(코믹뷰어 등)가 서버에 올려 둔 표지가 있으면 그걸 쓴다
+        origin.server?.let { srv ->
+            sync.readThumb(srv, entry)?.let { bytes ->
+                scaleDown(bytes)?.let { bmp ->
+                    writeDisk(key, bmp)
+                    memory.put(key, bmp)
+                    return bmp
+                }
+            }
+        }
         val bmp = try {
             when (entry.kind) {
                 BookKind.COMIC -> withSource(origin, entry) { src ->
@@ -132,6 +143,11 @@ class ThumbnailLoader private constructor(context: Context) {
         } else {
             writeDisk(key, bmp)
             memory.put(key, bmp)
+            // 이 기기에서 만든 표지는 서버에도 올려 다른 기기가 쓰게 한다
+            origin.server?.let { srv ->
+                val out = java.io.ByteArrayOutputStream()
+                if (bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)) sync.uploadThumb(srv, entry, out.toByteArray())
+            }
         }
         return bmp
     }
@@ -254,7 +270,8 @@ class ThumbnailLoader private constructor(context: Context) {
     }
 
     companion object {
-        private const val TARGET_WIDTH = 180
+        /** 표지 폭 — 서버에 올려 코믹뷰어와 같이 쓰므로 긴 변 약 360px */
+        private const val TARGET_WIDTH = 250
         /** FTP의 PDF는 이 크기 이하만 표지를 만든다 (표지 하나 때문에 큰 파일을 받지 않도록) */
         private const val MAX_FTP_PDF = 40L * 1024 * 1024
 

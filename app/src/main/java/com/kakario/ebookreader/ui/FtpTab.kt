@@ -60,11 +60,13 @@ fun FtpTab(
     }
 
     val serverId = location.server.id
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sync = remember { com.kakario.ebookreader.data.ServerSync.get(context) }
     FolderBrowser(
         title = location.server.name,
         path = path,
         origin = Origin(location.server),
-        load = { browser.list(it) },
+        load = { p -> browser.list(p).also { list -> sync.pullFolderAsync(location.server, p, list) } },
         onUp = {
             val atTop = path == location.root || path == "/"
             if (atTop) onLocationChange(null)

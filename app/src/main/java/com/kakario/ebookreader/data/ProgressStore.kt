@@ -46,16 +46,40 @@ class ProgressStore private constructor(context: Context) {
             prefs.getBoolean("$key#done", false),
         )
 
+    /** 마지막으로 읽은 시각 (밀리초, 0 = 모름). 서버 기록과 비교해 더 최근 쪽을 따른다. */
+    fun time(key: String): Long = prefs.getLong("$key#time", 0L)
+
+    /** 읽는 중에 위치 저장 → 서버에도 몇 초 뒤 올라간다 (FTP 책만). */
     fun set(key: String, position: Int, total: Int, done: Boolean) {
+        val now = System.currentTimeMillis()
+        write(key, position, total, done, now)
+        onLocalChange?.invoke(key, position, total, done, now)
+    }
+
+    /** 서버에서 받은 기록으로 바꾸기 (다시 서버로 올리지는 않음). 더 최근일 때만. */
+    fun mergeFromServer(key: String, position: Int, total: Int, done: Boolean, time: Long): Boolean {
+        if (time <= time(key)) return false
+        write(key, position, total, done, time)
+        return true
+    }
+
+    private fun write(key: String, position: Int, total: Int, done: Boolean, time: Long) {
         prefs.edit()
             .putInt(key, position)
             .putInt("$key#total", total)
             .putBoolean("$key#done", done)
+            .putLong("$key#time", time)
             .apply()
     }
 
+    /** 모든 기록 (처음 한 번 서버에 올릴 때) */
+    fun allKeys(): List<String> = prefs.all.keys.filter { '#' !in it }
+
+    /** 위치가 바뀌면 불린다 (ServerSync가 등록). */
+    var onLocalChange: ((key: String, position: Int, total: Int, done: Boolean, time: Long) -> Unit)? = null
+
     fun clear(key: String) {
-        prefs.edit().remove(key).remove("$key#total").remove("$key#done").apply()
+        prefs.edit().remove(key).remove("$key#total").remove("$key#done").remove("$key#time").apply()
         version++
     }
 

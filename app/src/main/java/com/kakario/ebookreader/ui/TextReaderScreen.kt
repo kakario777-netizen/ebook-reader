@@ -171,6 +171,7 @@ fun TextReaderScreen(
         onDispose {
             content?.close()
             progress.bump()
+            com.kakario.ebookreader.data.ServerSync.get(context).flushAll() // 닫을 때 서버에 바로 올리기
         }
     }
 

@@ -167,6 +167,28 @@ class FtpBrowser(private val server: FtpServer) {
         }
     }
 
+    /** 작은 파일(동기화 기록·표지)을 통째로 읽는다. 없으면 null. */
+    suspend fun readSmall(path: String): ByteArray? = ftp {
+        ensureConnected()
+        client.setRestartOffset(0)
+        val out = java.io.ByteArrayOutputStream()
+        val ok = client.retrieveFile(path, out)
+        if (ok) out.toByteArray() else null
+    }
+
+    /** 작은 파일을 올린다 (임시 이름으로 올린 뒤 바꿔서, 다른 기기가 반쯤 쓴 파일을 읽지 않게). 폴더가 없으면 만든다. */
+    suspend fun writeSmall(path: String, bytes: ByteArray): Boolean = ftp {
+        ensureConnected()
+        val dir = path.substringBeforeLast('/', "")
+        if (dir.isNotEmpty() && !client.changeWorkingDirectory(dir)) client.makeDirectory(dir)
+        client.changeWorkingDirectory("/")
+        val tmp = "$path.tmp"
+        val stored = client.storeFile(tmp, java.io.ByteArrayInputStream(bytes))
+        if (!stored) return@ftp false
+        client.deleteFile(path)
+        client.rename(tmp, path)
+    }
+
     /** 서버에서 파일 하나를 지운다. */
     suspend fun delete(path: String) = ftp {
         ensureConnected()

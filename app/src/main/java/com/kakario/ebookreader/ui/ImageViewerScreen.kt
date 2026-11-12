@@ -114,7 +114,8 @@ fun ImageViewerScreen(
     DisposableEffect(book) {
         onDispose {
             book.close()
-            progress.bump() // 목록 진행률 다시 그리기
+            progress.bump()
+            com.kakario.ebookreader.data.ServerSync.get(context).flushAll() // 닫을 때 서버에 바로 올리기 // 목록 진행률 다시 그리기
         }
     }
 

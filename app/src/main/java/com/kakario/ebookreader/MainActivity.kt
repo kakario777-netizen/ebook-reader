@@ -144,6 +144,14 @@ class MainActivity : ComponentActivity() {
                 // 책을 보는 동안엔 표지 만들기를 멈춰 보는 쪽에 속도를 양보
                 LaunchedEffect(openBook != null) { thumbnails.paused.value = openBook != null }
                 val servers = remember { mutableStateListOf<FtpServer>().apply { addAll(serverStore.load()) } }
+                // 서버 동기화: 서버 목록을 알려주고, 처음 한 번 폰에 있던 읽기 기록을 모두 올린다 (꺼도 이어서)
+                val sync = remember { com.kakario.ebookreader.data.ServerSync.get(applicationContext) }
+                LaunchedEffect(servers.toList()) {
+                    sync.setServers(servers.toList())
+                    sync.startInitialUpload()
+                }
+                val syncStatus by sync.status.collectAsState()
+                val openScope = androidx.compose.runtime.rememberCoroutineScope()
                 val favorites = remember { mutableStateListOf<Favorite>().apply { addAll(favoriteStore.load()) } }
                 var tab by remember { mutableIntStateOf(TAB_FAVORITES) }
 
@@ -192,6 +200,14 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                            syncStatus?.let { msg ->
+                                Text(
+                                    msg,
+                                    color = Ink,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                )
+                            }
                             TabBar(
                                 selected = tab,
                                 onSelect = { tab = it },
@@ -209,7 +225,10 @@ class MainActivity : ComponentActivity() {
                                         onColumnsChange = { changeSettings(settings.copy(shelfColumns = it)) },
                                         onOpenBook = { origin, b ->
                                             val e = b.toEntry()
-                                            openBook = OpenBook(origin, e, listOf(e))
+                                            openScope.launch {
+                                                origin.server?.let { sync.pullBeforeOpen(it, e) }
+                                                openBook = OpenBook(origin, e, listOf(e))
+                                            }
                                         },
                                         onOpen = { fav ->
                                             if (fav.isLocal) {
@@ -237,7 +256,13 @@ class MainActivity : ComponentActivity() {
                                         browser = ftpBrowser,
                                         onLocationChange = { ftpLocation = it },
                                         onOpenBook = { entry, siblings ->
-                                            ftpLocation?.let { openBook = OpenBook(Origin(it.server), entry, siblings) }
+                                            ftpLocation?.let { loc ->
+                                                // 열기 전에 서버 기록 확인 (다른 기기에서 더 읽었으면 거기부터)
+                                                openScope.launch {
+                                                    sync.pullBeforeOpen(loc.server, entry)
+                                                    openBook = OpenBook(Origin(loc.server), entry, siblings)
+                                                }
+                                            }
                                         },
                                         onSaveServer = { server ->
                                             val idx = servers.indexOfFirst { it.id == server.id }
