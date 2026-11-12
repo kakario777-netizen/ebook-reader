@@ -55,14 +55,14 @@ jobs:
           echo "::error title=build-errors::${msg}"
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk ebook-reader.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk ebook-reader-${{ github.run_number }}.apk
 
       - name: Publish to Releases (latest)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest ebook-reader.apk \
+          gh release create latest ebook-reader-${{ github.run_number }}.apk \
             --title "최신 빌드 #${{ github.run_number }}" \
-            --notes "커밋: ${{ github.sha }} — 폰에서 ebook-reader.apk를 눌러 받아 설치하세요." \
+            --notes "커밋: ${{ github.sha }} — 폰에서 ebook-reader-${{ github.run_number }}.apk를 눌러 받아 설치하세요. (파일 이름의 숫자 = 빌드 번호)" \
             --target ${{ github.sha }}
