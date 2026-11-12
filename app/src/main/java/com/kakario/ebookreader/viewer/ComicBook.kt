@@ -146,14 +146,14 @@ class ComicBook(
                 try {
                     val pg = pages.getOrNull(index) ?: throw UserFacingException("없는 페이지예요")
                     val e = pg.entry
-                    val bytes = if (pg.nest >= 0) {
+                    val bytes: ByteArray? = if (pg.nest >= 0) {
                         val nest = nests[pg.nest]
-                        if (prefetch && nest.file == null) prefetchGate.withPermit { withNest(nest) { ZipReader.extract(it, e) } }
-                        else withNest(nest) { ZipReader.extract(it, e) }
+                        if (prefetch && nest.file == null) prefetchGate.withPermit { withNest<ByteArray?>(nest) { ZipReader.extract(it, e) } }
+                        else withNest<ByteArray?>(nest) { ZipReader.extract(it, e) }
                     } else if (prefetch) {
-                        prefetchGate.withPermit { withSource { ZipReader.extract(it, e) } }
+                        prefetchGate.withPermit { withSource<ByteArray?> { ZipReader.extract(it, e) } }
                     } else {
-                        withSource { ZipReader.extract(it, e) }
+                        withSource<ByteArray?> { ZipReader.extract(it, e) }
                     } ?: throw UserFacingException("이 페이지를 읽을 수 없어요 (지원하지 않는 압축 방식)")
                     raws.put(index, bytes)
                     bytes
