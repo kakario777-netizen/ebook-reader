@@ -110,29 +110,25 @@ fun FavoritesScreen(
                         .combinedClickable(onClick = { onOpenBook(origin, book) }, onLongClick = { bookMenu = book })
                         .padding(horizontal = if (columns >= 5) 6.dp else 10.dp, vertical = if (columns >= 5) 8.dp else 14.dp),
                 ) {
-                    BookFace(
+                    ShelfTile(
                         origin = origin,
                         entry = entry,
-                        title = titleOf(book.name),
+                        badge = when {
+                            p.finished -> "완독"
+                            else -> "${p.percent}%"
+                        },
                         compact = columns >= 5,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.68f),
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         titleOf(book.name),
                         color = Ink,
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        when {
-                            p.finished -> "다 읽음"
-                            p.started -> "${p.percent}%"
-                            else -> if (origin.isLocal) "내 폰" else "FTP"
-                        },
-                        color = Ink,
-                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }

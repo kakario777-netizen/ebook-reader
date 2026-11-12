@@ -366,7 +366,8 @@ private fun BookPager(
                 val remaining = (pageCount - 1 - last).coerceAtLeast(0)
                 val percent = ((last + 1) * 100 / pageCount.coerceAtLeast(1)).coerceIn(0, 100)
                 InfoBar(
-                    right = if (remaining == 0) "마지막 페이지 · $percent%" else "남은 ${remaining}쪽 · $percent%",
+                    center = "${titleOf(entry.name)} (${last + 1}/$pageCount)",
+                    right = if (remaining == 0) "마지막 · $percent%" else "$percent%",
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

@@ -378,6 +378,34 @@ private fun TextPages(
         goToPosition(p, position)
     }
 
+    // 지금 장 안에서 몇 쪽째인지 (장이 너무 길면 계산하지 않음)
+    var chapterPage by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    LaunchedEffect(loc, paginator) {
+        val p = paginator ?: return@LaunchedEffect
+        val l = loc ?: return@LaunchedEffect
+        val ti = content.tocIndexAt(position)
+        if (ti < 0) {
+            chapterPage = null
+            return@LaunchedEffect
+        }
+        val startPos = content.toc[ti].position
+        val endPos = content.toc.getOrNull(ti + 1)?.position ?: content.totalChars
+        val s0 = content.sectionAt(startPos)
+        val s1 = content.sectionAt((endPos - 1).coerceAtLeast(startPos))
+        if (s1 - s0 > 4 || l.section !in s0..s1) {
+            chapterPage = null
+            return@LaunchedEffect
+        }
+        var before = 0
+        var tot = 0
+        for (sec in s0..s1) {
+            val c = runCatching { p.get(sec).count }.getOrDefault(0)
+            if (sec < l.section) before += c
+            tot += c
+        }
+        chapterPage = (before + l.page + 1) to tot
+    }
+
     fun navigate(forward: Boolean) {
         val p = paginator ?: return
         val l = loc ?: return
@@ -536,10 +564,12 @@ private fun TextPages(
         }
 
         if (settings.showInfoBar && !overlay && !atEnd && sp != null) {
-            val percent = (position.toLong() * 100 / total).toInt().coerceIn(0, 100)
-            val inSection = if (sp.count > 1) "${(l?.page ?: 0) + 1}/${sp.count}  ·  " else ""
+            // 가운데: 지금 장 제목 (장 안 쪽수/장 전체 쪽수), 오른쪽: 진행률 소수 둘째 자리
+            val chapterTitle = content.toc.getOrNull(content.tocIndexAt(position))?.title ?: title
+            val cp = chapterPage
             InfoBar(
-                right = "$inSection$percent%",
+                center = if (cp != null) "$chapterTitle (${cp.first}/${cp.second})" else chapterTitle,
+                right = String.format(java.util.Locale.US, "%.2f%%", position * 100.0 / total),
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }

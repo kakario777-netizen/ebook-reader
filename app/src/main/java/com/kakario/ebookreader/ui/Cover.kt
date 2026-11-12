@@ -2,6 +2,11 @@ package com.kakario.ebookreader.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -151,5 +156,100 @@ fun BookFace(origin: Origin, entry: FileEntry, modifier: Modifier = Modifier, ti
                 drawLine(Ink.copy(alpha = 0.5f), Offset(x - s * 2f, 0f), Offset(x - s * 2f, size.height), strokeWidth = s * 0.6f)
             }
         }
+    }
+}
+
+/**
+ * 책장 칸 (sam 기본 서재 모양):
+ *  - 바깥 실선 테두리 안에 점선 테두리 (오른쪽 아래 모서리를 비스듬히 깎음)
+ *  - 오른쪽 위: 아래가 둥근 탭에 진행률 (0% · 35% · 완독)
+ *  - 왼쪽 아래: 오른쪽이 둥근 탭에 형식 (TXT · EPUB · PDF · ZIP)
+ *  - 가운데: 표지 그림이 있으면 그림, 없으면 선으로 그린 펼친 책
+ */
+@Composable
+fun ShelfTile(origin: Origin, entry: FileEntry, badge: String, modifier: Modifier = Modifier, compact: Boolean = false) {
+    val cover = rememberCover(origin, entry)
+    val labelStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
+    Box(modifier) {
+        // 표지 그림 (점선 안쪽)
+        if (cover != null) {
+            Image(
+                bitmap = cover.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize().padding(if (compact) 5.dp else 8.dp),
+            )
+        }
+        Canvas(Modifier.matchParentSize()) {
+            val s = 1.dp.toPx()
+            val w = size.width
+            val h = size.height
+            // 바깥 실선
+            drawRect(Ink, topLeft = Offset(s / 2, s / 2), size = Size(w - s, h - s), style = Stroke(1.2f * s))
+            // 안쪽 점선 (오른쪽 아래 모서리 깎음)
+            val m = (if (compact) 4 else 7) * s
+            val cut = (if (compact) 7 else 12) * s
+            val path = Path().apply {
+                moveTo(m, m)
+                lineTo(w - m, m)
+                lineTo(w - m, h - m - cut)
+                lineTo(w - m - cut, h - m)
+                lineTo(m, h - m)
+                close()
+            }
+            drawPath(path, Ink, style = Stroke(0.8f * s, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2 * s, 2 * s))))
+            if (cover == null) {
+                // 가운데 펼친 책
+                val bw = w * 0.30f
+                val bh = bw * 0.62f
+                val cx = w / 2
+                val cy = h / 2
+                val left = Path().apply {
+                    moveTo(cx, cy - bh / 2 + 2 * s)
+                    quadraticBezierTo(cx - bw / 4, cy - bh / 2 - 2 * s, cx - bw / 2, cy - bh / 2)
+                    lineTo(cx - bw / 2, cy + bh / 2)
+                    quadraticBezierTo(cx - bw / 4, cy + bh / 2 - 2 * s, cx, cy + bh / 2 + 2 * s)
+                    close()
+                }
+                val right = Path().apply {
+                    moveTo(cx, cy - bh / 2 + 2 * s)
+                    quadraticBezierTo(cx + bw / 4, cy - bh / 2 - 2 * s, cx + bw / 2, cy - bh / 2)
+                    lineTo(cx + bw / 2, cy + bh / 2)
+                    quadraticBezierTo(cx + bw / 4, cy + bh / 2 - 2 * s, cx, cy + bh / 2 + 2 * s)
+                    close()
+                }
+                drawPath(left, Ink, style = Stroke(1.2f * s))
+                drawPath(right, Ink, style = Stroke(1.2f * s))
+                for (k in 1..4) {
+                    val y = cy - bh / 2 + bh * k / 5.5f
+                    drawLine(Ink, Offset(cx - bw * 0.40f, y), Offset(cx - bw * 0.10f, y), strokeWidth = s)
+                    drawLine(Ink, Offset(cx + bw * 0.10f, y), Offset(cx + bw * 0.40f, y), strokeWidth = s)
+                }
+            }
+        }
+        // 오른쪽 위 진행률 탭 (아래가 둥근)
+        Text(
+            badge,
+            color = Ink,
+            style = labelStyle,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = if (compact) 4.dp else 8.dp)
+                .background(Paper, RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp))
+                .border(1.dp, Ink, RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp))
+                .padding(horizontal = if (compact) 5.dp else 9.dp, vertical = if (compact) 1.dp else 3.dp),
+        )
+        // 왼쪽 아래 형식 탭 (오른쪽이 둥근)
+        Text(
+            entry.kind?.label ?: "",
+            color = Ink,
+            style = labelStyle,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .background(Paper, RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                .border(1.dp, Ink, RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                .padding(horizontal = if (compact) 5.dp else 9.dp, vertical = if (compact) 1.dp else 3.dp),
+        )
     }
 }
