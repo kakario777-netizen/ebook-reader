@@ -34,19 +34,24 @@ class PreparedCache private constructor(context: Context) {
 
     private fun trim() {
         val files = dir.listFiles()?.sortedByDescending { it.lastModified() } ?: return
+        val limit = maxBytes
+        if (limit <= 0) return
         var total = 0L
         for (f in files) {
             total += f.length()
-            if (total > MAX_BYTES) f.delete()
+            if (total > limit) f.delete()
         }
     }
+
+    fun sizeBytes(): Long = dir.listFiles()?.sumOf { it.length() } ?: 0L
 
     fun clear() {
         dir.listFiles()?.forEach { it.delete() }
     }
 
     companion object {
-        private const val MAX_BYTES = 300L * 1024 * 1024
+        /** 최대 용량 (설정에서 바꿈, 0 이하 = 제한 없음) */
+        @Volatile var maxBytes: Long = 300L * 1024 * 1024
         @Volatile private var instance: PreparedCache? = null
         fun get(context: Context): PreparedCache =
             instance ?: synchronized(this) { instance ?: PreparedCache(context.applicationContext).also { instance = it } }

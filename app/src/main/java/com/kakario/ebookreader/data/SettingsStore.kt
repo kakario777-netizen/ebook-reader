@@ -108,6 +108,10 @@ data class AppSettings(
     val volumeKeys: Boolean = true,
     /** 목록에 표지 작게 보여주기 (끄면 글자만) */
     val listCovers: Boolean = true,
+    /** 받아둔 책 최대 용량 (MB, 0 = 제한 없음) */
+    val bookCacheMb: Int = 800,
+    /** TXT 정리본 최대 용량 (MB, 0 = 제한 없음) */
+    val preparedCacheMb: Int = 300,
     /** 폴더 목록을 표지 격자로 */
     val listGrid: Boolean = true,
     /** 격자 한 줄 칸 수 */
@@ -170,6 +174,8 @@ class SettingsStore(context: Context) {
             doubleTapZoom = prefs.getBoolean("double_tap_zoom", d.doubleTapZoom),
             volumeKeys = prefs.getBoolean("volume_keys", d.volumeKeys),
             listCovers = prefs.getBoolean("list_covers", d.listCovers),
+            bookCacheMb = prefs.getInt("book_cache_mb", d.bookCacheMb),
+            preparedCacheMb = prefs.getInt("prepared_cache_mb", d.preparedCacheMb),
             listGrid = prefs.getBoolean("list_grid", d.listGrid),
             listColumns = prefs.getInt("list_columns", d.listColumns).coerceIn(SHELF_MIN, SHELF_MAX),
             listSort = enumOf(prefs.getString("list_sort", null), d.listSort),
@@ -216,6 +222,8 @@ class SettingsStore(context: Context) {
             .putBoolean("double_tap_zoom", s.doubleTapZoom)
             .putBoolean("volume_keys", s.volumeKeys)
             .putBoolean("list_covers", s.listCovers)
+            .putInt("book_cache_mb", s.bookCacheMb)
+            .putInt("prepared_cache_mb", s.preparedCacheMb)
             .putBoolean("list_grid", s.listGrid)
             .putInt("list_columns", s.listColumns)
             .putString("list_sort", s.listSort.name)

@@ -71,9 +71,10 @@ class BookCache private constructor(context: Context) {
     private fun trim(keep: File) {
         val files = dir.listFiles()?.filter { !it.name.endsWith(".part") } ?: return
         var total = files.sumOf { it.length() }
-        if (total <= MAX_BYTES) return
+        val limit = maxBytes
+        if (limit <= 0 || total <= limit) return
         for (f in files.sortedBy { it.lastModified() }) {
-            if (total <= MAX_BYTES) break
+            if (total <= limit) break
             if (f == keep) continue
             total -= f.length()
             f.delete()
@@ -87,7 +88,8 @@ class BookCache private constructor(context: Context) {
     }
 
     companion object {
-        private const val MAX_BYTES = 800L * 1024 * 1024
+        /** 최대 용량 (설정에서 바꿈, 0 이하 = 제한 없음) */
+        @Volatile var maxBytes: Long = 800L * 1024 * 1024
         private const val MAX_SINGLE = 700L * 1024 * 1024
 
         @Volatile private var instance: BookCache? = null

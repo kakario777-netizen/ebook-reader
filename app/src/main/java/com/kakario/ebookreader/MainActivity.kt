@@ -131,7 +131,11 @@ class MainActivity : ComponentActivity() {
                 settingsStore.save(it)
             }
 
-            SideEffect { refresher.update(settings) }
+            SideEffect {
+                refresher.update(settings)
+                com.kakario.ebookreader.book.BookCache.maxBytes = settings.bookCacheMb.toLong() * 1024 * 1024
+                com.kakario.ebookreader.book.PreparedCache.maxBytes = settings.preparedCacheMb.toLong() * 1024 * 1024
+            }
 
             InkTheme(weightBoost = settings.uiWeight, scalePercent = settings.uiScale) {
               CompositionLocalProvider(

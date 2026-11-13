@@ -213,11 +213,39 @@ fun SettingsScreen(
             SectionTitle("저장공간")
             val thumbBytes = remember(cacheVersion) { thumbs?.diskCacheBytes() ?: 0L }
             val bookBytes = remember(cacheVersion) { books.sizeBytes() }
+            val prepCache = remember { com.kakario.ebookreader.book.PreparedCache.get(context) }
+            val prepBytes = remember(cacheVersion) { prepCache.sizeBytes() }
             Text(
-                "표지 ${formatBytes(thumbBytes)}  ·  FTP에서 받아둔 책 ${formatBytes(bookBytes)}",
+                "표지 ${formatBytes(thumbBytes)}  ·  FTP에서 받아둔 책 ${formatBytes(bookBytes)}  ·  TXT 정리본 ${formatBytes(prepBytes)}",
                 color = Ink,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            )
+            val sizeOptions = listOf(100, 300, 500, 1000, 2000, 5000, 0)
+            val sizeText: (Int) -> String = { mb ->
+                when {
+                    mb == 0 -> "무제한"
+                    mb >= 1000 -> "${mb / 1000}GB"
+                    else -> "${mb}MB"
+                }
+            }
+            LineChoices(
+                label = "받아둔 책 최대",
+                options = (sizeOptions + s.bookCacheMb).distinct().sortedBy { if (it == 0) Int.MAX_VALUE else it },
+                selected = s.bookCacheMb,
+                text = sizeText,
+            ) { onChange(s.copy(bookCacheMb = it)) }
+            LineChoices(
+                label = "TXT 정리본 최대",
+                options = (sizeOptions + s.preparedCacheMb).distinct().sortedBy { if (it == 0) Int.MAX_VALUE else it },
+                selected = s.preparedCacheMb,
+                text = sizeText,
+            ) { onChange(s.copy(preparedCacheMb = it)) }
+            Text(
+                "넘치면 오래 안 연 것부터 지워요. 정리본은 서버에도 있어서 지워져도 다시 받아 바로 열려요.",
+                color = Ink,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
             )
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                 LineButton("모두 지우기") { confirmClear = true }
@@ -234,13 +262,14 @@ fun SettingsScreen(
                 DialogAction("지우기", bold = true) {
                     thumbs?.clear()
                     books.clear()
+                    com.kakario.ebookreader.book.PreparedCache.get(context).clear()
                     cacheVersion++
                     confirmClear = false
                 }
             },
             dismiss = { DialogAction("취소") { confirmClear = false } },
         ) {
-            Text("표지와 받아둔 책을 지워요.\n읽은 위치·책장·즐겨찾기·서버 정보는 그대로예요.", color = Ink)
+            Text("표지·받아둔 책·TXT 정리본을 지워요.\n읽은 위치·책장·즐겨찾기·서버 정보는 그대로예요.", color = Ink)
         }
     }
 }
