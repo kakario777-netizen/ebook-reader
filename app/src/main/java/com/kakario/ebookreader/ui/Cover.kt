@@ -253,3 +253,44 @@ fun ShelfTile(origin: Origin, entry: FileEntry, badge: String, modifier: Modifie
         )
     }
 }
+
+/** 격자 보기의 폴더 칸: 책 칸과 같은 크기, 선으로 그린 폴더 모양. */
+@Composable
+fun FolderTile(favorite: Boolean, modifier: Modifier = Modifier, compact: Boolean = false) {
+    Box(modifier) {
+        Canvas(Modifier.matchParentSize()) {
+            val s = 1.dp.toPx()
+            val w = size.width
+            val h = size.height
+            // 바깥 실선 (책 칸과 같은 틀)
+            drawRect(Ink, topLeft = Offset(s / 2, s / 2), size = Size(w - s, h - s), style = Stroke(1.2f * s))
+            // 가운데 폴더: 탭이 달린 뒷판 + 앞판
+            val fw = w * 0.56f
+            val fh = fw * 0.72f
+            val l = (w - fw) / 2
+            val t = (h - fh) / 2
+            val tabW = fw * 0.38f
+            val tabH = fh * 0.14f
+            val back = Path().apply {
+                moveTo(l, t + tabH)
+                lineTo(l, t + fh)
+                lineTo(l + fw, t + fh)
+                lineTo(l + fw, t + tabH)
+                lineTo(l + tabW + tabH, t + tabH)
+                lineTo(l + tabW, t)
+                lineTo(l, t)
+                close()
+            }
+            drawPath(back, Ink, style = Stroke(1.4f * s))
+            drawLine(Ink, Offset(l, t + tabH * 2.2f), Offset(l + fw, t + tabH * 2.2f), strokeWidth = s)
+        }
+        if (favorite) {
+            Text(
+                "★",
+                color = Ink,
+                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+                modifier = Modifier.align(Alignment.TopEnd).padding(if (compact) 4.dp else 8.dp),
+            )
+        }
+    }
+}

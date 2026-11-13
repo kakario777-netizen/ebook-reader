@@ -429,16 +429,25 @@ private fun BookGrid(
         contentPadding = PaddingValues(bottom = 8.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(visible, key = { it.path }, span = { e -> GridItemSpan(if (e.isDirectory) maxLineSpan else 1) }) { entry ->
+        items(visible, key = { it.path }) { entry ->
             if (entry.isDirectory) {
-                Column {
-                    FolderRow(
-                        entry = entry,
-                        favorite = isFavorite(entry.path),
-                        onClick = { onOpenDir(entry.path) },
-                        onLongClick = { onLongClick(entry) },
+                Column(
+                    Modifier
+                        .combinedClickable(onClick = { onOpenDir(entry.path) }, onLongClick = { onLongClick(entry) })
+                        .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = if (compact) 8.dp else 12.dp),
+                ) {
+                    FolderTile(favorite = isFavorite(entry.path), compact = compact, modifier = Modifier.fillMaxWidth().aspectRatio(0.72f))
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        entry.name,
+                        color = Ink,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Line()
                 }
             } else {
                 val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
