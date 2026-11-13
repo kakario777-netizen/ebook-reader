@@ -33,7 +33,7 @@ object Reflow {
 
     fun endsSentence(t: String): Boolean = t.isEmpty() || t.last() in SENTENCE_END
 
-    fun process(rawLines: List<String>, mode: Mode): Result {
+    fun process(rawLines: List<String>, mode: Mode, onProgress: ((Float) -> Unit)? = null): Result {
         val raw = rawLines.map { it.trimEnd('\r') }
         val lines = raw.map { it.trimEnd(' ', '\t', '　', ' ').replace('\t', ' ') }
         if (mode == Mode.OFF) return Result(lines, false)
@@ -49,6 +49,7 @@ object Reflow {
         var anyWrapped = false
         val counts = IntArray(402)
         for (k in nb.indices) {
+            if (onProgress != null && k % 2000 == 0) onProgress(k.toFloat() / nb.size)
             val from = maxOf(0, k - WINDOW)
             val to = minOf(nb.size - 1, k + WINDOW)
             java.util.Arrays.fill(counts, 0)
@@ -63,9 +64,24 @@ object Reflow {
                 }
             }
             if (winSize < 6) continue
+            // 가장 많이 몰린 폭: 가장 작은 최댓값 c는 15이거나, c+3 길이의 줄이 실제로 있다.
+            // 그래서 전부 훑지 않고 그 후보만 오름차순으로 본다 (결과는 전부 훑는 것과 같음).
             var best = 0
             var bestAt = 0
-            for (c in 15..maxLen.coerceAtMost(397)) {
+            val cap = maxLen.coerceAtMost(397)
+            val cands = IntArray(to - from + 2)
+            var nc = 0
+            cands[nc++] = 15
+            for (j in from..to) {
+                val c = len[nb[j]].coerceAtMost(400) - 3
+                if (c in 16..cap) cands[nc++] = c
+            }
+            java.util.Arrays.sort(cands, 0, nc)
+            var prevC = -1
+            for (ci in 0 until nc) {
+                val c = cands[ci]
+                if (c == prevC || c > cap) continue
+                prevC = c
                 var sum = 0
                 for (d in -3..3) sum += counts[(c + d).coerceIn(0, 401)]
                 if (sum > best) {

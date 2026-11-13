@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -127,6 +129,9 @@ fun TextReaderScreen(
     var content by remember { mutableStateOf<TextContent?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var downloaded by remember { mutableLongStateOf(-1L) }
+    // 불러오기 단계 글과 전체 진행 (0~1, 모르면 -1)
+    var loadStage by remember { mutableStateOf("") }
+    var loadFrac by remember { mutableStateOf(-1f) }
     var retry by remember { mutableIntStateOf(0) }
 
     // TXT는 '잘린 문장 잇기' 설정이 바뀌면 다시 읽는다
@@ -135,17 +140,71 @@ fun TextReaderScreen(
         error = null
         var ftp: FtpBrowser? = null
         try {
-            val file = cache.fetch(
-                origin, entry,
-                ftp = { ftp ?: FtpBrowser(origin.server!!).also { ftp = it } },
-                onProgress = { done, _ -> downloaded = done },
-            )
-            val c = withContext(Dispatchers.Default) {
-                if (entry.kind == BookKind.EPUB) {
-                    TextContent.loadEpub(file)
-                        ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
-                } else {
-                    TextContent.loadTxt(file, settings.txtReflow, settings.txtChapters, settings.sentencePerLine)
+            val isTxt = entry.kind != BookKind.EPUB
+            val code = TextContent.prepCode(settings.txtReflow, settings.txtChapters, settings.sentencePerLine)
+            val prepCache = com.kakario.ebookreader.book.PreparedCache.get(context)
+            val sync = com.kakario.ebookreader.data.ServerSync.get(context)
+            val bookTitle = entry.name.substringBeforeLast('.')
+
+            // TXT: 줄 정리해 둔 정리본이 있으면 원본을 받거나 정리하지 않고 바로 연다
+            var prepared: TextContent.Companion.Prepared? = null
+            if (isTxt) {
+                loadStage = "정리본 찾는 중"
+                loadFrac = 0.02f
+                prepared = withContext(Dispatchers.IO) {
+                    prepCache.read(origin.tag, entry, code)?.let { TextContent.decodePrepared(it) }
+                }
+                val server = origin.server
+                if (prepared == null && server != null) {
+                    loadStage = "서버의 정리본 확인하는 중"
+                    val bytes = kotlinx.coroutines.withTimeoutOrNull(10_000) { sync.readPrepared(server, entry, code) }
+                    prepared = bytes?.let { b -> withContext(Dispatchers.Default) { TextContent.decodePrepared(b) } }
+                    if (prepared != null && bytes != null) withContext(Dispatchers.IO) { prepCache.write(origin.tag, entry, code, bytes) }
+                }
+            }
+
+            val c = if (prepared != null) {
+                loadStage = "페이지 준비하는 중"
+                loadFrac = 0.9f
+                withContext(Dispatchers.Default) { TextContent.fromPrepared(bookTitle, prepared) }
+            } else {
+                val needDownload = !origin.isLocal && cache.cachedFile(origin, entry) == null
+                val base = if (needDownload) 0.35f else 0f
+                if (needDownload) {
+                    loadStage = "파일 받는 중"
+                    loadFrac = 0f
+                }
+                val file = cache.fetch(
+                    origin, entry,
+                    ftp = { ftp ?: FtpBrowser(origin.server!!).also { ftp = it } },
+                    onProgress = { done, _ ->
+                        downloaded = done
+                        if (entry.size > 0) loadFrac = base * (done.toFloat() / entry.size).coerceIn(0f, 1f)
+                    },
+                )
+                withContext(Dispatchers.Default) {
+                    if (!isTxt) {
+                        loadStage = "책 여는 중"
+                        loadFrac = -1f
+                        TextContent.loadEpub(file)
+                            ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
+                    } else {
+                        val p = TextContent.prepareTxt(
+                            file.readBytes(), settings.txtReflow, settings.txtChapters, settings.sentencePerLine,
+                        ) { stage, f ->
+                            loadStage = stage
+                            loadFrac = base + (1f - base) * f
+                        }
+                        loadStage = "정리본 저장하는 중"
+                        loadFrac = base + (1f - base) * 0.9f
+                        val bytes = TextContent.encodePrepared(p)
+                        prepCache.write(origin.tag, entry, code, bytes)
+                        // 서버에도 올려서 다른 기기도 바로 열게
+                        origin.server?.let { sync.uploadPrepared(it, entry, code, bytes) }
+                        loadStage = "페이지 준비하는 중"
+                        loadFrac = base + (1f - base) * 0.95f
+                        TextContent.fromPrepared(bookTitle, p)
+                    }
                 }
             }
             if (c.sections.isEmpty()) {
@@ -199,16 +258,40 @@ fun TextReaderScreen(
                 Modifier.align(Alignment.Center).padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spinner()
-                Spacer(Modifier.height(14.dp))
-                Text(titleOf(entry.name), color = Ink, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-                if (downloaded >= 0 && entry.size > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "받는 중 ${(downloaded * 100 / entry.size).coerceIn(0, 100)}%",
-                        color = Ink,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                Text("불러오는 중…", color = Ink, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    titleOf(entry.name),
+                    color = Ink,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(40.dp)) // 제목 두 줄 밑
+                val f = loadFrac
+                if (f >= 0f) {
+                    // 게이지: 테두리 안을 진행만큼 채움
+                    Box(
+                        Modifier
+                            .width(260.dp)
+                            .height(14.dp)
+                            .border(1.dp, Ink),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(f.coerceIn(0f, 1f))
+                                .background(Ink)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("${(f * 100).toInt().coerceIn(0, 100)}%", color = Ink, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(4.dp))
+                }
+                if (loadStage.isNotEmpty()) {
+                    Text("$loadStage…", color = Ink, style = MaterialTheme.typography.bodySmall)
                 }
             }
 

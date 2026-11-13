@@ -196,6 +196,18 @@ class ServerSync private constructor(context: Context) {
         scope.launch { runCatching { conn(server).writeSmall(thumbPath(entry), jpeg) } }
     }
 
+    // ───────────────────── TXT 정리본 (줄 정리를 한 번 해 두면 다른 기기도 바로 연다)
+
+    fun preparedPath(entry: FileEntry, code: String): String =
+        syncDir(folderOf(entry.path)) + "/" + nameOf(entry.path) + "." + entry.size + "." + code + ".txtp"
+
+    suspend fun readPrepared(server: FtpServer, entry: FileEntry, code: String): ByteArray? =
+        runCatching { conn(server).readSmall(preparedPath(entry, code)) }.getOrNull()?.takeIf { it.size > 20 }
+
+    fun uploadPrepared(server: FtpServer, entry: FileEntry, code: String, bytes: ByteArray) {
+        scope.launch { runCatching { conn(server).writeSmall(preparedPath(entry, code), bytes) } }
+    }
+
     // ───────────────────── 처음 한 번: 폰에 있던 읽기 기록 모두 올리기 (꺼도 이어서)
 
     fun startInitialUpload() {

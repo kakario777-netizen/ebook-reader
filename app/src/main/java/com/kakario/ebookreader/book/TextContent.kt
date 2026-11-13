@@ -171,6 +171,99 @@ class TextContent(
             return out
         }
 
+        /** 정리 방식이 바뀌면 올려서 예전 정리본을 안 쓰게 한다. */
+        const val PREPARED_VERSION = 1
+
+        /** 정리 설정을 짧은 글자로 (정리본 이름에 붙임). */
+        fun prepCode(reflow: Reflow.Mode, chapters: Boolean, sentencePerLine: Boolean): String =
+            "v$PREPARED_VERSION${reflow.name.first()}${if (chapters) 1 else 0}${if (sentencePerLine) 1 else 0}"
+
+        /** 정리된 TXT: 문단(제목 표시 포함)들 + 문장을 이었는지. */
+        class Prepared(val blocks: List<Html.Block>, val reflowed: Boolean)
+
+        /**
+         * TXT 원본 → 정리본. 오래 걸리는 부분이라 단계마다 알려준다 (stage 글, 0~1 진행).
+         */
+        fun prepareTxt(
+            bytes: ByteArray,
+            reflow: Reflow.Mode,
+            chapters: Boolean,
+            sentencePerLine: Boolean,
+            report: (String, Float) -> Unit = { _, _ -> },
+        ): Prepared {
+            report("글자 읽는 중", 0.02f)
+            val text = TextDecode.decodeText(bytes)
+            report("줄 정리하는 중", 0.06f)
+            val result = Reflow.process(text.split('\n'), reflow) { report("줄 정리하는 중", 0.06f + 0.6f * it) }
+            val paras0 = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
+            report("문장 나누는 중", 0.68f)
+            val paras = if (!sentencePerLine) paras0 else paras0.flatMap { p ->
+                val t = p.trim()
+                if (t.isEmpty() || t.length < 25 || Chapters.looksLikeTitle(t) || Chapters.isSceneBreak(t)) listOf(p)
+                else Reflow.splitSentences(t)
+            }
+            report("장 제목 찾는 중", 0.74f)
+            val blocks = if (chapters) Chapters.mark(paras) else paras.map { Html.Block.Para(it) }
+            report("문단 다듬는 중", 0.86f)
+            return Prepared(Html.tidy(blocks), result.reflowed)
+        }
+
+        /** 정리본 → 책 내용 (빠름). */
+        fun fromPrepared(title: String, p: Prepared): TextContent =
+            build(title, listOf(p.blocks), images = { null }).also { it.reflowed = p.reflowed }
+
+        /** 정리본을 압축 파일 바이트로. 한 줄에 문단 하나: "<크기><부제목 s/->\t<글>" */
+        fun encodePrepared(p: Prepared): ByteArray {
+            val bos = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(bos).bufferedWriter(Charsets.UTF_8).use { w ->
+                w.write("EBTXTP$PREPARED_VERSION\t${if (p.reflowed) 1 else 0}\n")
+                for (b in p.blocks) {
+                    if (b !is Html.Block.Para) continue
+                    w.write(b.level.toString())
+                    w.write(if (b.sub) "s" else "-")
+                    w.write("\t")
+                    w.write(b.text.replace("\\", "\\\\").replace("\n", "\\n"))
+                    w.write("\n")
+                }
+            }
+            return bos.toByteArray()
+        }
+
+        fun decodePrepared(bytes: ByteArray): Prepared? = try {
+            java.util.zip.GZIPInputStream(bytes.inputStream()).bufferedReader(Charsets.UTF_8).use { r ->
+                val head = r.readLine() ?: return null
+                val hp = head.split('\t')
+                if (hp[0] != "EBTXTP$PREPARED_VERSION") return null
+                val reflowed = hp.getOrNull(1) == "1"
+                val out = ArrayList<Html.Block>()
+                while (true) {
+                    val line = r.readLine() ?: break
+                    val tab = line.indexOf('\t')
+                    if (tab < 2) continue
+                    val level = line.substring(0, tab - 1).toIntOrNull() ?: 0
+                    val sub = line[tab - 1] == 's'
+                    val raw = line.substring(tab + 1)
+                    val text = if (raw.indexOf('\\') < 0) raw else buildString {
+                        var i = 0
+                        while (i < raw.length) {
+                            val c = raw[i]
+                            if (c == '\\' && i + 1 < raw.length) {
+                                append(if (raw[i + 1] == 'n') '\n' else raw[i + 1])
+                                i += 2
+                            } else {
+                                append(c)
+                                i++
+                            }
+                        }
+                    }
+                    out += Html.Block.Para(text, level, sub)
+                }
+                Prepared(out, reflowed)
+            }
+        } catch (e: Exception) {
+            null
+        }
+
         /** TXT 파일 → 내용. 줄 하나가 문단 하나 (잘린 문장은 reflow 설정에 따라 다시 잇는다). */
         fun loadTxt(
             file: File,
