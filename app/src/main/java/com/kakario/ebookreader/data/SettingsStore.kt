@@ -16,6 +16,14 @@ enum class LightRefresh(val label: String) {
     OFF("안 함"),
 }
 
+/** 폴더 목록 정렬 기준. */
+enum class ListSort(val label: String) {
+    NAME("이름"),
+    DATE("날짜"),
+    SIZE("크기"),
+    TYPE("형식"),
+}
+
 /** 책장 정렬 방식. */
 enum class ShelfSort(val label: String) {
     ADDED("꽂은 순"),
@@ -104,6 +112,12 @@ data class AppSettings(
     val listGrid: Boolean = true,
     /** 격자 한 줄 칸 수 */
     val listColumns: Int = 5,
+    /** 폴더 목록 정렬 기준 */
+    val listSort: ListSort = ListSort.NAME,
+    /** 거꾸로 (내림차순) */
+    val listDesc: Boolean = false,
+    /** 폴더를 위에 (false면 아래) */
+    val foldersTop: Boolean = true,
 )
 
 class SettingsStore(context: Context) {
@@ -158,6 +172,9 @@ class SettingsStore(context: Context) {
             listCovers = prefs.getBoolean("list_covers", d.listCovers),
             listGrid = prefs.getBoolean("list_grid", d.listGrid),
             listColumns = prefs.getInt("list_columns", d.listColumns).coerceIn(SHELF_MIN, SHELF_MAX),
+            listSort = enumOf(prefs.getString("list_sort", null), d.listSort),
+            listDesc = prefs.getBoolean("list_desc", d.listDesc),
+            foldersTop = prefs.getBoolean("folders_top", d.foldersTop),
         )
     }
 
@@ -201,6 +218,9 @@ class SettingsStore(context: Context) {
             .putBoolean("list_covers", s.listCovers)
             .putBoolean("list_grid", s.listGrid)
             .putInt("list_columns", s.listColumns)
+            .putString("list_sort", s.listSort.name)
+            .putBoolean("list_desc", s.listDesc)
+            .putBoolean("folders_top", s.foldersTop)
             .apply()
     }
 

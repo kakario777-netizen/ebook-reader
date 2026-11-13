@@ -80,9 +80,13 @@ fun FavoritesScreen(
         }
     }
 
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    PagedArea(rememberPageInfo(gridState)) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        state = gridState,
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(bottom = 8.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -237,6 +241,7 @@ fun FavoritesScreen(
                 )
             }
         }
+    }
     }
 
     bookMenu?.let { b ->

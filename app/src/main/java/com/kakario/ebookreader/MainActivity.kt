@@ -139,7 +139,17 @@ class MainActivity : ComponentActivity() {
                 com.kakario.ebookreader.ui.LocalBrowseLayout provides com.kakario.ebookreader.ui.BrowseLayout(
                     grid = settings.listGrid,
                     columns = settings.listColumns,
-                    onChange = { g, c -> changeSettings(settings.copy(listGrid = g, listColumns = c)) },
+                    sort = settings.listSort,
+                    desc = settings.listDesc,
+                    foldersTop = settings.foldersTop,
+                    onChange = { l ->
+                        changeSettings(
+                            settings.copy(
+                                listGrid = l.grid, listColumns = l.columns, listSort = l.sort,
+                                listDesc = l.desc, foldersTop = l.foldersTop,
+                            )
+                        )
+                    },
                 ),
                 LocalShelf provides shelf,
                 LocalRefresher provides refresher,

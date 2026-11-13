@@ -66,9 +66,31 @@ private sealed interface LoadState {
 }
 
 /** 폴더 목록 모양: 표지 격자인지, 한 줄 칸 수. */
-data class BrowseLayout(val grid: Boolean, val columns: Int, val onChange: (grid: Boolean, columns: Int) -> Unit)
+data class BrowseLayout(
+    val grid: Boolean,
+    val columns: Int,
+    val sort: com.kakario.ebookreader.data.ListSort = com.kakario.ebookreader.data.ListSort.NAME,
+    val desc: Boolean = false,
+    val foldersTop: Boolean = true,
+    val onChange: (BrowseLayout) -> Unit = {},
+)
 
-val LocalBrowseLayout = compositionLocalOf { BrowseLayout(true, 5) { _, _ -> } }
+val LocalBrowseLayout = compositionLocalOf { BrowseLayout(true, 5) }
+
+/** 정렬: 기준·순서대로, 폴더는 위 또는 아래에 모아서. */
+fun sortEntries(list: List<FileEntry>, lay: BrowseLayout): List<FileEntry> {
+    val byKey: Comparator<FileEntry> = when (lay.sort) {
+        com.kakario.ebookreader.data.ListSort.NAME -> Comparator { a, b -> com.kakario.ebookreader.model.NaturalOrder.compare(a.name, b.name) }
+        com.kakario.ebookreader.data.ListSort.DATE -> compareBy<FileEntry> { it.modified }
+        com.kakario.ebookreader.data.ListSort.SIZE -> compareBy<FileEntry> { if (it.isDirectory) 0L else it.size }
+        com.kakario.ebookreader.data.ListSort.TYPE -> compareBy<FileEntry> { it.kind?.ordinal ?: -1 }
+    }.thenComparator { a, b -> com.kakario.ebookreader.model.NaturalOrder.compare(a.name, b.name) }
+    val ordered = if (lay.desc) byKey.reversed() else byKey
+    val (dirs, files) = list.partition { it.isDirectory }
+    val d = dirs.sortedWith(ordered)
+    val f = files.sortedWith(ordered)
+    return if (lay.foldersTop) d + f else f + d
+}
 
 /** 목록에 표지를 작게 보여줄지 (설정). */
 val LocalListCovers = compositionLocalOf { true }
@@ -101,6 +123,7 @@ fun FolderBrowser(
     val thumbs = LocalThumbnails.current
     val shelf = LocalShelf.current
     var menuFor by remember { mutableStateOf<FileEntry?>(null) }
+    var viewMenu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
 
     val currentLoad by rememberUpdatedState(load)
@@ -157,12 +180,7 @@ fun FolderBrowser(
                 } ?: path,
                 onBack = onUp,
                 actions = {
-                    val lay = LocalBrowseLayout.current
-                    TextAction(if (lay.grid) "목록" else "격자") { lay.onChange(!lay.grid, lay.columns) }
-                    if (lay.grid) {
-                        TextAction("－") { lay.onChange(true, (lay.columns + 1).coerceAtMost(com.kakario.ebookreader.data.SettingsStore.SHELF_MAX)) }
-                        TextAction("＋") { lay.onChange(true, (lay.columns - 1).coerceAtLeast(com.kakario.ebookreader.data.SettingsStore.SHELF_MIN)) }
-                    }
+                    TextAction("보기·정렬") { viewMenu = true }
                     TextAction(if (isFavorite(path)) "★" else "☆") { toggle(path) }
                     IconAction(Icons.Outlined.Refresh, "새로고침") { reloadKey++ }
                 },
@@ -180,7 +198,10 @@ fun FolderBrowser(
                     )
 
                     is LoadState.Loaded -> {
-                        val visible = s.entries.filter { it.isDirectory || it.isBook }
+                        val layNow = LocalBrowseLayout.current
+                        val visible = remember(s.entries, layNow.sort, layNow.desc, layNow.foldersTop) {
+                            sortEntries(s.entries.filter { it.isDirectory || it.isBook }, layNow)
+                        }
                         if (visible.isEmpty()) {
                             Text(
                                 "이 폴더에는 하위 폴더나 책 파일이 없어요\n(TXT · EPUB · PDF · ZIP)",
@@ -201,7 +222,10 @@ fun FolderBrowser(
                                     onOpenBook = { onOpenBook(it, books) },
                                     onLongClick = { menuFor = it },
                                 )
-                            } else LazyColumn(Modifier.fillMaxSize()) {
+                            } else {
+                              val listState = remember(path) { androidx.compose.foundation.lazy.LazyListState() }
+                              PagedArea(rememberPageInfo(listState)) {
+                              LazyColumn(Modifier.fillMaxSize(), state = listState, userScrollEnabled = false) {
                                 items(visible, key = { it.path }) { entry ->
                                     if (entry.isDirectory) {
                                         FolderRow(
@@ -221,12 +245,51 @@ fun FolderBrowser(
                                     Line()
                                 }
                             }
+                              }
+                            }
                         }
                     }
                 }
             }
         }
         LineSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+    }
+
+    // ── 보기·정렬
+    if (viewMenu) {
+        val lay = LocalBrowseLayout.current
+        LineDialog(
+            title = "보기 · 정렬",
+            onDismiss = { viewMenu = false },
+            dismiss = { DialogAction("닫기") { viewMenu = false } },
+        ) {
+            Column {
+                LineChoices("보기", listOf(true, false), lay.grid, { if (it) "표지 격자" else "줄 목록" }) {
+                    lay.onChange(lay.copy(grid = it))
+                }
+                if (lay.grid) {
+                    LineStepper(
+                        "한 줄 칸 수",
+                        "${lay.columns}",
+                        onMinus = { lay.onChange(lay.copy(columns = (lay.columns - 1).coerceAtLeast(com.kakario.ebookreader.data.SettingsStore.SHELF_MIN))) },
+                        onPlus = { lay.onChange(lay.copy(columns = (lay.columns + 1).coerceAtMost(com.kakario.ebookreader.data.SettingsStore.SHELF_MAX))) },
+                    )
+                }
+                LineChoices("정렬 기준", com.kakario.ebookreader.data.ListSort.entries, lay.sort, { it.label }) {
+                    lay.onChange(lay.copy(sort = it))
+                }
+                LineChoices("순서", listOf(false, true), lay.desc, {
+                    when (lay.sort) {
+                        com.kakario.ebookreader.data.ListSort.DATE -> if (it) "최신 먼저" else "오래된 먼저"
+                        com.kakario.ebookreader.data.ListSort.SIZE -> if (it) "큰 것 먼저" else "작은 것 먼저"
+                        else -> if (it) "거꾸로 (ㅎ→ㄱ)" else "차례대로 (ㄱ→ㅎ)"
+                    }
+                }) { lay.onChange(lay.copy(desc = it)) }
+                LineChoices("폴더 위치", listOf(true, false), lay.foldersTop, { if (it) "위로" else "아래로" }) {
+                    lay.onChange(lay.copy(foldersTop = it))
+                }
+            }
+        }
     }
 
     // ── 길게 누르기 메뉴
@@ -357,9 +420,13 @@ private fun BookGrid(
     val store = remember { ProgressStore.get(ctx) }
     val version = store.version
     val compact = columns >= 5
+    val gridState = remember(visible.firstOrNull()?.path?.let { parentOf(it) }) { androidx.compose.foundation.lazy.grid.LazyGridState() }
+    PagedArea(rememberPageInfo(gridState)) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        state = gridState,
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(bottom = 8.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(visible, key = { it.path }, span = { e -> GridItemSpan(if (e.isDirectory) maxLineSpan else 1) }) { entry ->
@@ -405,7 +472,10 @@ private fun BookGrid(
             }
         }
     }
+    }
 }
+
+private fun parentOf(p: String) = p.substringBeforeLast('/')
 
 private enum class ConfirmAction { DELETE, RESET }
 private data class Confirm(val entry: FileEntry, val action: ConfirmAction, val step: Int)
