@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) updater.check(quiet = true)
         askNotificationPermission()
 
+        com.kakario.ebookreader.data.Privacy.init(applicationContext)
         setContent {
             var settings by remember { mutableStateOf(settingsStore.load()) }
             val changeSettings: (com.kakario.ebookreader.data.AppSettings) -> Unit = {
@@ -173,6 +174,17 @@ class MainActivity : ComponentActivity() {
                 // 각 탭의 현재 위치 — 탭을 옮겨 다녀도 그대로 남는다.
                 var ftpLocation by remember { mutableStateOf<FtpLocation?>(null) }
                 var localPath by remember { mutableStateOf<String?>(null) }
+                var privacyOpen by remember { mutableStateOf(false) }
+                // 개인모드를 끄면 숨긴 곳에 들어가 있던 화면에서 나온다
+                LaunchedEffect(com.kakario.ebookreader.data.Privacy.unlocked, com.kakario.ebookreader.data.Privacy.hidden) {
+                    val pv = com.kakario.ebookreader.data.Privacy
+                    if (!pv.unlocked) {
+                        ftpLocation?.let { loc ->
+                            if (!pv.showServer(loc.server.id) || (loc.path != null && !pv.show("ftp${loc.server.id}", loc.path))) ftpLocation = null
+                        }
+                        localPath?.let { if (!pv.show("local", it)) localPath = null }
+                    }
+                }
 
                 // 열려 있는 서버의 FTP 연결 (서버가 바뀌거나 닫히면 끊는다)
                 val openServer = ftpLocation?.server
@@ -227,7 +239,10 @@ class MainActivity : ComponentActivity() {
                                 selected = tab,
                                 onSelect = { tab = it },
                                 onSettings = { settingsOpen = true },
+                                privacyOn = com.kakario.ebookreader.data.Privacy.unlocked,
+                                onPrivacy = { privacyOpen = true },
                             )
+                            if (privacyOpen) com.kakario.ebookreader.ui.PrivacyFlow(onClose = { privacyOpen = false })
                             Line()
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 when (tab) {
@@ -377,7 +392,7 @@ class MainActivity : ComponentActivity() {
 
 /** 맨 위 탭: 글자만, 고른 탭은 굵게 + 아래 밑줄. 오른쪽 끝 설정. */
 @Composable
-private fun TabBar(selected: Int, onSelect: (Int) -> Unit, onSettings: () -> Unit) {
+private fun TabBar(selected: Int, onSelect: (Int) -> Unit, onSettings: () -> Unit, privacyOn: Boolean, onPrivacy: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -409,6 +424,15 @@ private fun TabBar(selected: Int, onSelect: (Int) -> Unit, onSettings: () -> Uni
             }
         }
         Box(Modifier.weight(1f))
+        // 개인모드: 켜져 있으면 굵게 + 밑줄
+        Text(
+            if (privacyOn) "개인모드 켜짐" else "개인모드",
+            color = Ink,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (privacyOn) FontWeight.Black else null,
+            textDecoration = if (privacyOn) androidx.compose.ui.text.style.TextDecoration.Underline else null,
+            modifier = Modifier.clickable(onClick = onPrivacy).padding(horizontal = 10.dp, vertical = 12.dp),
+        )
         IconAction(Icons.Outlined.Settings, "설정", onSettings)
     }
 }

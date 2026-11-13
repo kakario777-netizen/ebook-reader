@@ -65,10 +65,12 @@ fun FavoritesScreen(
     val progress = remember { ProgressStore.get(context) }
 
     // 서버가 지워진 책은 보여주지 않는다
+    val pv = com.kakario.ebookreader.data.Privacy
     val books0 = shelf.books.mapNotNull { b ->
         if (b.serverId == null) Origin(null) to b
         else servers.firstOrNull { it.id == b.serverId }?.let { Origin(it) to b }
-    }
+    }.filter { (o, b) -> pv.show(o.tag, b.path) }
+    val favs = favorites.filter { f -> pv.show(if (f.isLocal) "local" else "ftp${f.serverId}", f.path) }
     val books = remember(books0, sort, progress.version) {
         when (sort) {
             com.kakario.ebookreader.data.ShelfSort.ADDED -> books0
@@ -81,12 +83,12 @@ fun FavoritesScreen(
     }
 
     // 책장 칸: 책 먼저, 그다음 즐겨찾기 폴더 (폴더 모양 칸)
-    val cells: List<Any> = remember(books, favorites) { books + favorites }
+    val cells: List<Any> = remember(books, favs) { favs + books }
     val compact = columns >= 5
     Column(Modifier.fillMaxSize()) {
         BrowserHeader(
             title = "책장",
-            subtitle = if (books.isEmpty()) null else "${books.size}권 · 폴더 ${favorites.size}개 · 길게 누르면 뺄 수 있어요",
+            subtitle = if (books.isEmpty()) null else "폴더 ${favs.size}개 · ${books.size}권 · 길게 누르면 뺄 수 있어요",
             onBack = null,
             actions = {
                 // 정렬: 누를 때마다 꽂은 순 → 최근 읽은 순 → 이름순
@@ -121,8 +123,9 @@ fun FavoritesScreen(
             ) { c ->
                 if (c is Favorite) {
                     val server = servers.firstOrNull { it.id == c.serverId }
+                    val ftag = if (c.isLocal) "local" else "ftp${c.serverId}"
                     GridCell(
-                        title = c.name,
+                        title = (if (pv.unlocked && pv.isMarked(ftag, c.path)) "(숨김) " else "") + c.name,
                         bold = true,
                         onClick = { onOpen(c) },
                         onLongClick = { removing = c },
@@ -134,7 +137,7 @@ fun FavoritesScreen(
                     val entry = remember(book) { book.toEntry() }
                     val p = remember(progress.version, book.id) { progress.get(progress.keyFor(origin.tag, entry)) }
                     GridCell(
-                        title = titleOf(book.name),
+                        title = (if (pv.unlocked && pv.isMarked(origin.tag, book.path)) "(숨김) " else "") + titleOf(book.name),
                         onClick = { onOpenBook(origin, book) },
                         onLongClick = { bookMenu = book },
                     ) { m ->
@@ -190,6 +193,14 @@ fun FavoritesScreen(
                     shelf.remove(b)
                     bookMenu = null
                 }
+                if (pv.unlocked) {
+                    val tag = if (b.serverId == null) "local" else "ftp${b.serverId}"
+                    val marked = pv.isMarked(tag, b.path)
+                    MenuLine(if (marked) "숨김 풀기" else "숨기기 (개인모드 끄면 안 보임)") {
+                        pv.toggle(pv.pathKey(tag, b.path))
+                        bookMenu = null
+                    }
+                }
             }
         }
     }
@@ -206,7 +217,19 @@ fun FavoritesScreen(
             },
             dismiss = { DialogAction("취소") { removing = null } },
         ) {
-            Text("'${fav.name}' 폴더를 즐겨찾기에서 뺄까요?\n(실제 폴더나 파일은 지워지지 않아요)", color = Ink)
+            Column {
+                Text("'${fav.name}' 폴더를 즐겨찾기에서 뺄까요?\n(실제 폴더나 파일은 지워지지 않아요)", color = Ink)
+                if (pv.unlocked) {
+                    val tag = if (fav.isLocal) "local" else "ftp${fav.serverId}"
+                    val marked = pv.isMarked(tag, fav.path)
+                    Spacer(Modifier.height(8.dp))
+                    Line()
+                    MenuLine(if (marked) "숨김 풀기" else "숨기기 (개인모드 끄면 안 보임)") {
+                        pv.toggle(pv.pathKey(tag, fav.path))
+                        removing = null
+                    }
+                }
+            }
         }
     }
 }

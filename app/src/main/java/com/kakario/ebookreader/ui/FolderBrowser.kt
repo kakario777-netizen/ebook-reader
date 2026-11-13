@@ -199,10 +199,18 @@ fun FolderBrowser(
 
                     is LoadState.Loaded -> {
                         val layNow = LocalBrowseLayout.current
-                        val visible = remember(s.entries, layNow.sort, layNow.desc, layNow.foldersTop) {
-                            sortEntries(s.entries.filter { it.isDirectory || it.isBook }, layNow)
+                        val pv = com.kakario.ebookreader.data.Privacy
+                        val visible = remember(s.entries, layNow.sort, layNow.desc, layNow.foldersTop, pv.unlocked, pv.hidden) {
+                            sortEntries(s.entries.filter { (it.isDirectory || it.isBook) && pv.show(origin.tag, it.path) }, layNow)
                         }
-                        if (visible.isEmpty()) {
+                        if (!pv.show(origin.tag, path)) {
+                            Text(
+                                "숨긴 폴더예요",
+                                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                                color = Ink,
+                                textAlign = TextAlign.Center,
+                            )
+                        } else if (visible.isEmpty()) {
                             Text(
                                 "이 폴더에는 하위 폴더나 책 파일이 없어요\n(TXT · EPUB · PDF · ZIP)",
                                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
@@ -229,7 +237,7 @@ fun FolderBrowser(
                                 items(visible, key = { it.path }) { entry ->
                                     if (entry.isDirectory) {
                                         FolderRow(
-                                            entry = entry,
+                                            entry = if (pv.unlocked && pv.isMarked(origin.tag, entry.path)) entry.copy(name = "(숨김) " + entry.name) else entry,
                                             favorite = isFavorite(entry.path),
                                             onClick = { onOpenDir(entry.path) },
                                             onLongClick = { menuFor = entry },
@@ -339,6 +347,14 @@ fun FolderBrowser(
                         toggle(target.path)
                     }
                 }
+                if (com.kakario.ebookreader.data.Privacy.unlocked) {
+                    val marked = com.kakario.ebookreader.data.Privacy.isMarked(origin.tag, target.path)
+                    MenuLine(if (marked) "숨김 풀기" else "숨기기 (개인모드 끄면 안 보임)") {
+                        menuFor = null
+                        com.kakario.ebookreader.data.Privacy.toggle(com.kakario.ebookreader.data.Privacy.pathKey(origin.tag, target.path))
+                        toast(if (marked) "숨김을 풀었어요" else "숨겼어요 — 개인모드를 끄면 안 보여요")
+                    }
+                }
             }
         }
     }
@@ -428,7 +444,7 @@ private fun BookGrid(
     ) { entry ->
         if (entry.isDirectory) {
             GridCell(
-                title = entry.name,
+                title = hiddenMark(origin, entry) + entry.name,
                 bold = true,
                 onClick = { onOpenDir(entry.path) },
                 onLongClick = { onLongClick(entry) },
@@ -436,7 +452,7 @@ private fun BookGrid(
         } else {
             val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
             GridCell(
-                title = titleOf(entry.name),
+                title = hiddenMark(origin, entry) + titleOf(entry.name),
                 onClick = { onOpenBook(entry) },
                 onLongClick = { onLongClick(entry) },
             ) { m ->
@@ -455,6 +471,10 @@ private fun BookGrid(
         }
     }
 }
+
+/** 개인모드가 켜져 있을 때 숨김 지정된 항목 앞 표시. */
+fun hiddenMark(origin: Origin, entry: FileEntry): String =
+    if (com.kakario.ebookreader.data.Privacy.unlocked && com.kakario.ebookreader.data.Privacy.isMarked(origin.tag, entry.path)) "(숨김) " else ""
 
 private fun parentOf(p: String) = p.substringBeforeLast('/')
 
@@ -516,7 +536,7 @@ private fun BookRow(origin: Origin, entry: FileEntry, onClick: () -> Unit, onLon
         }
         Column(Modifier.weight(1f)) {
             Text(
-                titleOf(entry.name),
+                hiddenMark(origin, entry) + titleOf(entry.name),
                 color = Ink,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 2,

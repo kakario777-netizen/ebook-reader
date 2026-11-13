@@ -45,7 +45,7 @@ fun ServerListScreen(
     Column(Modifier.fillMaxSize()) {
         BrowserHeader(
             title = "FTP 서버",
-            subtitle = if (servers.isEmpty()) "서버를 추가해 주세요" else "${servers.size}개",
+            subtitle = if (servers.isEmpty()) "서버를 추가해 주세요" else "${servers.count { com.kakario.ebookreader.data.Privacy.showServer(it.id) }}개",
             onBack = null,
             actions = { TextAction("+ 추가") { editing = NEW_SERVER } },
         )
@@ -60,7 +60,7 @@ fun ServerListScreen(
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
-                items(servers, key = { it.id }) { server ->
+                items(servers.filter { com.kakario.ebookreader.data.Privacy.showServer(it.id) }, key = { it.id }) { server ->
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -69,12 +69,21 @@ fun ServerListScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(server.name, color = Ink, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                (if (com.kakario.ebookreader.data.Privacy.unlocked && com.kakario.ebookreader.data.Privacy.isServerHidden(server.id)) "(숨김) " else "") + server.name,
+                                color = Ink,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
                             Text(
                                 "${server.host}:${server.port}  ·  ${server.user.ifBlank { "익명" }}",
                                 color = Ink,
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                        }
+                        if (com.kakario.ebookreader.data.Privacy.unlocked) {
+                            TextAction(if (com.kakario.ebookreader.data.Privacy.isServerHidden(server.id)) "숨김 풀기" else "숨기기") {
+                                com.kakario.ebookreader.data.Privacy.toggle(com.kakario.ebookreader.data.Privacy.serverKey(server.id))
+                            }
                         }
                         TextAction("수정") { editing = server }
                         TextAction("삭제") { deleting = server }
