@@ -17,6 +17,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
@@ -59,6 +65,11 @@ private sealed interface LoadState {
     data class Failed(val message: String) : LoadState
 }
 
+/** 폴더 목록 모양: 표지 격자인지, 한 줄 칸 수. */
+data class BrowseLayout(val grid: Boolean, val columns: Int, val onChange: (grid: Boolean, columns: Int) -> Unit)
+
+val LocalBrowseLayout = compositionLocalOf { BrowseLayout(true, 5) { _, _ -> } }
+
 /** 목록에 표지를 작게 보여줄지 (설정). */
 val LocalListCovers = compositionLocalOf { true }
 
@@ -94,16 +105,27 @@ fun FolderBrowser(
 
     val currentLoad by rememberUpdatedState(load)
     val currentDelete by rememberUpdatedState(delete)
+    val listCache = remember { com.kakario.ebookreader.data.ListCache.get(context) }
+    var refreshing by remember { mutableStateOf(false) }
     LaunchedEffect(path, reloadKey) {
-        state = LoadState.Loading
-        state = try {
-            LoadState.Loaded(currentLoad(path))
+        // 1) 저장해 둔 목록이 있으면 바로 보여주고
+        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { listCache.read(origin.tag, path) }
+        state = if (saved != null) LoadState.Loaded(saved) else LoadState.Loading
+        // 2) 그동안 새로 받아서 바뀐 게 있으면 고친다
+        refreshing = true
+        try {
+            val fresh = currentLoad(path)
+            if (saved == null || fresh != saved) state = LoadState.Loaded(fresh)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { listCache.write(origin.tag, path, fresh) }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: UserFacingException) {
-            LoadState.Failed(e.message ?: "알 수 없는 오류")
         } catch (e: Exception) {
-            LoadState.Failed("예상치 못한 오류: ${e.message ?: e.javaClass.simpleName}")
+            val msg = (e as? UserFacingException)?.message
+                ?: "예상치 못한 오류: ${e.message ?: e.javaClass.simpleName}"
+            if (saved == null) state = LoadState.Failed(msg)
+            else toastLater(scope, snackbar, "새 목록을 받지 못해 저장된 목록을 보여줘요")
+        } finally {
+            refreshing = false
         }
     }
 
@@ -130,10 +152,17 @@ fun FolderBrowser(
                         if (dirs > 0) append(" · 폴더 ${dirs}개")
                         append("  ·  ")
                         append(path)
+                        if (refreshing) append("  ·  확인 중…")
                     }
                 } ?: path,
                 onBack = onUp,
                 actions = {
+                    val lay = LocalBrowseLayout.current
+                    TextAction(if (lay.grid) "목록" else "격자") { lay.onChange(!lay.grid, lay.columns) }
+                    if (lay.grid) {
+                        TextAction("－") { lay.onChange(true, (lay.columns + 1).coerceAtMost(com.kakario.ebookreader.data.SettingsStore.SHELF_MAX)) }
+                        TextAction("＋") { lay.onChange(true, (lay.columns - 1).coerceAtLeast(com.kakario.ebookreader.data.SettingsStore.SHELF_MIN)) }
+                    }
                     TextAction(if (isFavorite(path)) "★" else "☆") { toggle(path) }
                     IconAction(Icons.Outlined.Refresh, "새로고침") { reloadKey++ }
                 },
@@ -161,7 +190,18 @@ fun FolderBrowser(
                             )
                         } else {
                             val books = visible.filter { it.isBook }
-                            LazyColumn(Modifier.fillMaxSize()) {
+                            val lay = LocalBrowseLayout.current
+                            if (lay.grid) {
+                                BookGrid(
+                                    origin = origin,
+                                    visible = visible,
+                                    columns = lay.columns,
+                                    isFavorite = isFavorite,
+                                    onOpenDir = onOpenDir,
+                                    onOpenBook = { onOpenBook(it, books) },
+                                    onLongClick = { menuFor = it },
+                                )
+                            } else LazyColumn(Modifier.fillMaxSize()) {
                                 items(visible, key = { it.path }) { entry ->
                                     if (entry.isDirectory) {
                                         FolderRow(
@@ -295,6 +335,74 @@ fun FolderBrowser(
             dismiss = { DialogAction("취소") { confirm = null } },
         ) {
             Text(body, color = Ink)
+        }
+    }
+}
+
+private fun toastLater(scope: CoroutineScope, host: SnackbarHostState, msg: String) = scope.toast(host, msg)
+
+/** 표지 격자: 폴더는 위에 한 줄씩, 책은 책장처럼 칸으로. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BookGrid(
+    origin: Origin,
+    visible: List<FileEntry>,
+    columns: Int,
+    isFavorite: (String) -> Boolean,
+    onOpenDir: (String) -> Unit,
+    onOpenBook: (FileEntry) -> Unit,
+    onLongClick: (FileEntry) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val store = remember { ProgressStore.get(ctx) }
+    val version = store.version
+    val compact = columns >= 5
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(columns),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        items(visible, key = { it.path }, span = { e -> GridItemSpan(if (e.isDirectory) maxLineSpan else 1) }) { entry ->
+            if (entry.isDirectory) {
+                Column {
+                    FolderRow(
+                        entry = entry,
+                        favorite = isFavorite(entry.path),
+                        onClick = { onOpenDir(entry.path) },
+                        onLongClick = { onLongClick(entry) },
+                    )
+                    Line()
+                }
+            } else {
+                val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
+                Column(
+                    Modifier
+                        .combinedClickable(onClick = { onOpenBook(entry) }, onLongClick = { onLongClick(entry) })
+                        .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = if (compact) 8.dp else 12.dp),
+                ) {
+                    ShelfTile(
+                        origin = origin,
+                        entry = entry,
+                        badge = when {
+                            p.finished -> "완독"
+                            !p.started -> "NEW"
+                            else -> "${p.percent}%"
+                        },
+                        compact = compact,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        titleOf(entry.name),
+                        color = Ink,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
         }
     }
 }

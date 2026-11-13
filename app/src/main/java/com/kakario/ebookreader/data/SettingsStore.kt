@@ -100,6 +100,10 @@ data class AppSettings(
     val volumeKeys: Boolean = true,
     /** 목록에 표지 작게 보여주기 (끄면 글자만) */
     val listCovers: Boolean = true,
+    /** 폴더 목록을 표지 격자로 */
+    val listGrid: Boolean = true,
+    /** 격자 한 줄 칸 수 */
+    val listColumns: Int = 5,
 )
 
 class SettingsStore(context: Context) {
@@ -152,6 +156,8 @@ class SettingsStore(context: Context) {
             doubleTapZoom = prefs.getBoolean("double_tap_zoom", d.doubleTapZoom),
             volumeKeys = prefs.getBoolean("volume_keys", d.volumeKeys),
             listCovers = prefs.getBoolean("list_covers", d.listCovers),
+            listGrid = prefs.getBoolean("list_grid", d.listGrid),
+            listColumns = prefs.getInt("list_columns", d.listColumns).coerceIn(SHELF_MIN, SHELF_MAX),
         )
     }
 
@@ -193,6 +199,8 @@ class SettingsStore(context: Context) {
             .putBoolean("double_tap_zoom", s.doubleTapZoom)
             .putBoolean("volume_keys", s.volumeKeys)
             .putBoolean("list_covers", s.listCovers)
+            .putBoolean("list_grid", s.listGrid)
+            .putInt("list_columns", s.listColumns)
             .apply()
     }
 

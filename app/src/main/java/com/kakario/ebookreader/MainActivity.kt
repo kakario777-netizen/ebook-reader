@@ -136,6 +136,11 @@ class MainActivity : ComponentActivity() {
               CompositionLocalProvider(
                 LocalThumbnails provides thumbnails,
                 LocalListCovers provides settings.listCovers,
+                com.kakario.ebookreader.ui.LocalBrowseLayout provides com.kakario.ebookreader.ui.BrowseLayout(
+                    grid = settings.listGrid,
+                    columns = settings.listColumns,
+                    onChange = { g, c -> changeSettings(settings.copy(listGrid = g, listColumns = c)) },
+                ),
                 LocalShelf provides shelf,
                 LocalRefresher provides refresher,
               ) {
