@@ -420,67 +420,39 @@ private fun BookGrid(
     val store = remember { ProgressStore.get(ctx) }
     val version = store.version
     val compact = columns >= 5
-    val gridState = remember(visible.firstOrNull()?.path?.let { parentOf(it) }) { androidx.compose.foundation.lazy.grid.LazyGridState() }
-    PagedArea(rememberPageInfo(gridState)) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        state = gridState,
-        userScrollEnabled = false,
-        contentPadding = PaddingValues(bottom = 8.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        items(visible, key = { it.path }) { entry ->
-            if (entry.isDirectory) {
-                Column(
-                    Modifier
-                        .combinedClickable(onClick = { onOpenDir(entry.path) }, onLongClick = { onLongClick(entry) })
-                        .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = if (compact) 8.dp else 12.dp),
-                ) {
-                    FolderTile(favorite = isFavorite(entry.path), compact = compact, modifier = Modifier.fillMaxWidth().aspectRatio(0.72f))
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        entry.name,
-                        color = Ink,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            } else {
-                val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
-                Column(
-                    Modifier
-                        .combinedClickable(onClick = { onOpenBook(entry) }, onLongClick = { onLongClick(entry) })
-                        .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = if (compact) 8.dp else 12.dp),
-                ) {
-                    ShelfTile(
-                        origin = origin,
-                        entry = entry,
-                        badge = when {
-                            p.finished -> "완독"
-                            !p.started -> "NEW"
-                            else -> "${p.percent}%"
-                        },
-                        compact = compact,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        titleOf(entry.name),
-                        color = Ink,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+    PagedGrid(
+        items = visible,
+        columns = columns,
+        pageKey = visible.firstOrNull()?.path?.let { parentOf(it) },
+        key = { it.path },
+    ) { entry ->
+        if (entry.isDirectory) {
+            GridCell(
+                title = entry.name,
+                bold = true,
+                onClick = { onOpenDir(entry.path) },
+                onLongClick = { onLongClick(entry) },
+            ) { m -> FolderTile(favorite = isFavorite(entry.path), compact = compact, modifier = m) }
+        } else {
+            val p = remember(version, entry.path, entry.size) { store.get(store.keyFor(origin.tag, entry)) }
+            GridCell(
+                title = titleOf(entry.name),
+                onClick = { onOpenBook(entry) },
+                onLongClick = { onLongClick(entry) },
+            ) { m ->
+                ShelfTile(
+                    origin = origin,
+                    entry = entry,
+                    badge = when {
+                        p.finished -> "완독"
+                        !p.started -> "NEW"
+                        else -> "${p.percent}%"
+                    },
+                    compact = compact,
+                    modifier = m,
+                )
             }
         }
-    }
     }
 }
 

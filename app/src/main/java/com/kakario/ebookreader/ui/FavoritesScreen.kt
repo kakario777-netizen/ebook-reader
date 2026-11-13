@@ -80,168 +80,99 @@ fun FavoritesScreen(
         }
     }
 
-    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-    PagedArea(rememberPageInfo(gridState)) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        state = gridState,
-        userScrollEnabled = false,
-        contentPadding = PaddingValues(bottom = 8.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column {
-                BrowserHeader(
-                    title = "책장",
-                    subtitle = if (books.isEmpty()) null else "${books.size}권 · 길게 누르면 뺄 수 있어요",
-                    onBack = null,
-                    actions = {
-                        // 정렬: 누를 때마다 꽂은 순 → 최근 읽은 순 → 이름순
-                        LineButton(sort.label, modifier = Modifier.padding(end = 6.dp)) {
-                            val all = com.kakario.ebookreader.data.ShelfSort.entries
-                            onSortChange(all[(sort.ordinal + 1) % all.size])
-                        }
-                        // 책 크기: 작게(한 줄에 더 많이) / 크게
-                        LineButton("작게", modifier = Modifier.padding(end = 6.dp), enabled = columns < SettingsStore.SHELF_MAX) {
-                            onColumnsChange(columns + 1)
-                        }
-                        LineButton("크게", modifier = Modifier.padding(end = 12.dp), enabled = columns > SettingsStore.SHELF_MIN) {
-                            onColumnsChange(columns - 1)
-                        }
-                    },
-                )
-                Line()
-            }
-        }
-        if (books.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    "책장이 비어 있어요\nFTP·내 폰 목록에서 책을 길게 눌러\n'책장에 꽂기'를 고르면 여기에 꽂혀요",
-                    color = Ink,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 36.dp, horizontal = 24.dp),
-                )
-            }
-        } else {
-            items(books, key = { "b" + it.second.id }) { (origin, book) ->
-                val entry = remember(book) { book.toEntry() }
-                val p = remember(progress.version, book.id) { progress.get(progress.keyFor(origin.tag, entry)) }
-                Column(
-                    Modifier
-                        .combinedClickable(onClick = { onOpenBook(origin, book) }, onLongClick = { bookMenu = book })
-                        .padding(horizontal = if (columns >= 5) 6.dp else 10.dp, vertical = if (columns >= 5) 8.dp else 14.dp),
-                ) {
-                    ShelfTile(
-                        origin = origin,
-                        entry = entry,
-                        badge = when {
-                            p.finished -> "완독"
-                            !p.started -> "NEW"
-                            else -> "${p.percent}%"
-                        },
-                        compact = columns >= 5,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        titleOf(book.name),
-                        color = Ink,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+    // 책장 칸: 책 먼저, 그다음 즐겨찾기 폴더 (폴더 모양 칸)
+    val cells: List<Any> = remember(books, favorites) { books + favorites }
+    val compact = columns >= 5
+    Column(Modifier.fillMaxSize()) {
+        BrowserHeader(
+            title = "책장",
+            subtitle = if (books.isEmpty()) null else "${books.size}권 · 폴더 ${favorites.size}개 · 길게 누르면 뺄 수 있어요",
+            onBack = null,
+            actions = {
+                // 정렬: 누를 때마다 꽂은 순 → 최근 읽은 순 → 이름순
+                LineButton(sort.label, modifier = Modifier.padding(end = 6.dp)) {
+                    val all = com.kakario.ebookreader.data.ShelfSort.entries
+                    onSortChange(all[(sort.ordinal + 1) % all.size])
                 }
-            }
-        }
-
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column {
-                Spacer(Modifier.height(8.dp))
-                Line()
-                Text(
-                    "즐겨찾기 폴더",
-                    color = Ink,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 10.dp),
-                )
-                Line()
-            }
-        }
-        if (favorites.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    "즐겨찾기한 폴더가 없어요\nFTP나 내 폰 탭에서 폴더 위 ☆를 누르면 여기에 모여요",
-                    color = Ink,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                )
-            }
+                // 칸 크기: 작게(한 줄에 더 많이) / 크게 — 줄 수는 화면에 맞춰 자동
+                LineButton("작게", modifier = Modifier.padding(end = 6.dp), enabled = columns < SettingsStore.SHELF_MAX) {
+                    onColumnsChange(columns + 1)
+                }
+                LineButton("크게", modifier = Modifier.padding(end = 12.dp), enabled = columns > SettingsStore.SHELF_MIN) {
+                    onColumnsChange(columns - 1)
+                }
+            },
+        )
+        Line()
+        if (cells.isEmpty()) {
+            Text(
+                "책장이 비어 있어요\nFTP·내 폰 목록에서 책을 길게 눌러 '책장에 꽂기'를 고르거나\n폴더 위 ☆를 누르면 여기에 모여요",
+                color = Ink,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 36.dp, horizontal = 24.dp),
+            )
         } else {
-            items(favorites, key = { "f" + it.id }, span = { GridItemSpan(maxLineSpan) }) { fav ->
-                val server = servers.firstOrNull { it.id == fav.serverId }
-                val source = if (fav.isLocal) "내 폰" else "FTP · " + (server?.name ?: "알 수 없는 서버")
-                Column {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(onClick = { onOpen(fav) }, onLongClick = { removing = fav })
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                fav.name,
-                                color = Ink,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                "$source  ·  ${fav.path}",
-                                color = Ink,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Text("›", color = Ink, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 10.dp))
+            PagedGrid(
+                items = cells,
+                columns = columns,
+                pageKey = sort,
+                key = { c -> if (c is Favorite) "f" + c.id else "b" + (c as Pair<*, *>).let { (it.second as ShelfBook).id } },
+                modifier = Modifier.weight(1f),
+            ) { c ->
+                if (c is Favorite) {
+                    val server = servers.firstOrNull { it.id == c.serverId }
+                    GridCell(
+                        title = c.name,
+                        bold = true,
+                        onClick = { onOpen(c) },
+                        onLongClick = { removing = c },
+                    ) { m -> FolderTile(favorite = true, compact = compact, modifier = m) }
+                } else {
+                    @Suppress("UNCHECKED_CAST")
+                    val (origin, book) = c as Pair<Origin, ShelfBook>
+                    val entry = remember(book) { book.toEntry() }
+                    val p = remember(progress.version, book.id) { progress.get(progress.keyFor(origin.tag, entry)) }
+                    GridCell(
+                        title = titleOf(book.name),
+                        onClick = { onOpenBook(origin, book) },
+                        onLongClick = { bookMenu = book },
+                    ) { m ->
+                        ShelfTile(
+                            origin = origin,
+                            entry = entry,
+                            badge = when {
+                                p.finished -> "완독"
+                                !p.started -> "NEW"
+                                else -> "${p.percent}%"
+                            },
+                            compact = compact,
+                            modifier = m,
+                        )
                     }
-                    Line()
                 }
             }
         }
-
         // 맨 아래 오른쪽: 버전·빌드 + 업데이트 확인
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            val ver = remember {
-                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
-            }
-            val build = remember { Updater.get(context).currentBuild }
-            Row(
-                Modifier.fillMaxWidth().padding(top = 28.dp, end = 12.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "이북리더 v$ver · 빌드 #$build",
-                    color = Ink,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    "업데이트 확인",
-                    color = Ink,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable(onClick = onCheckUpdate).padding(horizontal = 10.dp, vertical = 10.dp),
-                )
-            }
+        val ver = remember {
+            runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
         }
-    }
+        val build = remember { Updater.get(context).currentBuild }
+        Line()
+        Row(
+            Modifier.fillMaxWidth().padding(end = 12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("이북리더 v$ver · 빌드 #$build", color = Ink, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "업데이트 확인",
+                color = Ink,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable(onClick = onCheckUpdate).padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        }
     }
 
     bookMenu?.let { b ->
