@@ -128,8 +128,9 @@ fun FavoritesScreen(
                         onLongClick = { removing = c },
                     ) { m -> FolderTile(favorite = true, compact = compact, modifier = m) }
                 } else {
-                    @Suppress("UNCHECKED_CAST")
-                    val (origin, book) = c as Pair<Origin, ShelfBook>
+                    val pair = c as Pair<*, *>
+                    val origin = pair.first as Origin
+                    val book = pair.second as ShelfBook
                     val entry = remember(book) { book.toEntry() }
                     val p = remember(progress.version, book.id) { progress.get(progress.keyFor(origin.tag, entry)) }
                     GridCell(
