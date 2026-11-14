@@ -37,8 +37,9 @@ object TextDecode {
         if (sample > 0 && (evenZero + oddZero) > sample / 5) {
             return String(b, if (oddZero >= evenZero) Charsets.UTF_16LE else Charsets.UTF_16BE)
         }
-        // 3) UTF-8로 깨짐 없이 읽히는지
+        // 3) UTF-8로 깨짐 없이 읽히는지, 아니면 거의 UTF-8인지 (깨진 글자 조금 섞인 파일)
         strictUtf8(b)?.let { return it }
+        if (isUtf8Bytes(b)) return String(b, Charsets.UTF_8)
         // 4) 옛 한글 방식
         return String(b, korean)
     }
@@ -84,9 +85,16 @@ object TextDecode {
         return if (isUtf8(file)) Charsets.UTF_8 else korean
     }
 
-    /** 파일 전체가 올바른 UTF-8인지 조금씩 읽으며 확인. */
+    /**
+     * UTF-8인지 점수로 판단 (파일을 조금씩 읽으며).
+     * 중간에 깨진 글자가 몇 개 섞인 UTF-8 파일도 UTF-8로 본다:
+     * 올바른 UTF-8 글자가 깨진 자리보다 50배 넘게 많으면 UTF-8.
+     * (옛 한글 방식 파일은 깨진 자리가 훨씬 많이 나온다)
+     */
     private fun isUtf8(file: java.io.File): Boolean {
         var need = 0
+        var valid = 0L
+        var invalid = 0L
         val buf = ByteArray(1 shl 16)
         java.io.FileInputStream(file).use { fis ->
             while (true) {
@@ -95,19 +103,52 @@ object TextDecode {
                 for (i in 0 until n) {
                     val b = buf[i].toInt() and 0xFF
                     if (need > 0) {
-                        if (b and 0xC0 != 0x80) return false
-                        need--
-                    } else when {
+                        if ((b and 0xC0) == 0x80) {
+                            need--
+                            if (need == 0) valid++
+                            continue
+                        }
+                        invalid++
+                        need = 0
+                        // 이 바이트를 새 글자 시작으로 다시 본다
+                    }
+                    when {
                         b < 0x80 -> {}
                         b in 0xC2..0xDF -> need = 1
                         b in 0xE0..0xEF -> need = 2
                         b in 0xF0..0xF4 -> need = 3
-                        else -> return false
+                        else -> invalid++
                     }
                 }
             }
         }
-        return need == 0
+        return valid == 0L && invalid == 0L || valid > invalid * 50
+    }
+
+    private fun isUtf8Bytes(b: ByteArray): Boolean {
+        var need = 0
+        var valid = 0L
+        var invalid = 0L
+        for (x in b) {
+            val v = x.toInt() and 0xFF
+            if (need > 0) {
+                if ((v and 0xC0) == 0x80) {
+                    need--
+                    if (need == 0) valid++
+                    continue
+                }
+                invalid++
+                need = 0
+            }
+            when {
+                v < 0x80 -> {}
+                v in 0xC2..0xDF -> need = 1
+                v in 0xE0..0xEF -> need = 2
+                v in 0xF0..0xF4 -> need = 3
+                else -> invalid++
+            }
+        }
+        return valid == 0L && invalid == 0L || valid > invalid * 50
     }
 
     /** XHTML·XML: 문서 머리의 encoding="..." 표시를 따르고, 없으면 UTF-8. */

@@ -172,7 +172,7 @@ class TextContent(
         }
 
         /** 정리 방식이 바뀌면 올려서 예전 정리본을 안 쓰게 한다. */
-        const val PREPARED_VERSION = 1
+        const val PREPARED_VERSION = 2
 
         /** 정리 설정을 짧은 글자로 (정리본 이름에 붙임). */
         fun prepCode(reflow: Reflow.Mode, chapters: Boolean, sentencePerLine: Boolean): String =
