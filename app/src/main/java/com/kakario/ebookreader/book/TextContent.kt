@@ -194,7 +194,10 @@ class TextContent(
             report("글자 읽는 중", 0.02f)
             val lines = TextDecode.readLines(file)
             report("줄 정리하는 중", 0.06f)
-            val result = Reflow.process(lines, reflow) { report("줄 정리하는 중", 0.06f + 0.6f * it) }
+            val totalLines = lines.size
+            val result = Reflow.process(lines, reflow) {
+                report("줄 정리하는 중 (${num((it * totalLines).toInt())} / ${num(totalLines)}줄)", 0.06f + 0.6f * it)
+            }
             lines.clear()
             val paras0 = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
             report("문장 나누는 중", 0.68f)
@@ -203,11 +206,18 @@ class TextContent(
                 if (t.isEmpty() || t.length < 25 || Chapters.looksLikeTitle(t) || Chapters.isSceneBreak(t)) listOf(p)
                 else Reflow.splitSentences(t)
             }
-            report("장 제목 찾는 중", 0.74f)
-            val blocks = if (chapters) Chapters.mark(paras) else paras.map { Html.Block.Para(it) }
+            report("장 제목 찾는 중", 0.70f)
+            val blocks = if (chapters) {
+                Chapters.mark(paras) { done, total, found ->
+                    val f = if (total > 0) done.toFloat() / total else 1f
+                    report("장 제목 찾는 중 (${found}개 찾음 · ${num(done)} / ${num(total)}줄)", 0.70f + 0.16f * f)
+                }
+            } else paras.map { Html.Block.Para(it) }
             report("문단 다듬는 중", 0.86f)
             return Prepared(Html.tidy(blocks), result.reflowed)
         }
+
+        private fun num(v: Int): String = String.format(java.util.Locale.US, "%,d", v)
 
         /** 정리본 → 책 내용 (빠름). */
         fun fromPrepared(title: String, p: Prepared): TextContent =

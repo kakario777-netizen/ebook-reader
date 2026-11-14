@@ -74,9 +74,21 @@ object Chapters {
     fun looksLikeTitle(t: String): Boolean = titleKind(t) != null
 
     /** 문단 목록 → 제목 표시를 붙인 블록 목록. */
-    fun mark(paragraphs: List<String>): List<Html.Block> {
+    fun mark(paragraphs: List<String>, onProgress: ((done: Int, total: Int, found: Int) -> Unit)? = null): List<Html.Block> {
         val n = paragraphs.size
-        fun blank(k: Int) = k < 0 || k >= n || paragraphs[k].isBlank()
+        // 짧은 줄만 앞뒤 공백을 떼어 둔다 (긴 문단은 제목이 될 수 없으니 복사하지 않음 → 빠르고 메모리 절약)
+        val blankArr = BooleanArray(n)
+        val short = arrayOfNulls<String>(n)
+        for (k in 0 until n) {
+            val p = paragraphs[k]
+            var a = 0
+            var b = p.length
+            while (a < b && p[a].isWhitespace()) a++
+            while (b > a && p[b - 1].isWhitespace()) b--
+            if (a == b) blankArr[k] = true
+            else if (b - a <= MAX_TITLE) short[k] = p.substring(a, b)
+        }
+        fun blank(k: Int) = k < 0 || k >= n || blankArr[k]
         fun isolated(k: Int) = blank(k - 1) && blank(k + 1)
 
         // 번호만 있는 줄이 앞뒤가 비어 있고, 1·2·3처럼 차례로 늘어나면 → 장 번호
@@ -84,7 +96,7 @@ object Chapters {
         run {
             val found = ArrayList<Pair<Int, Int>>()
             for (k in 0 until n) {
-                val m = NUMBER_LINE.matchEntire(paragraphs[k].trim()) ?: continue
+                val m = NUMBER_LINE.matchEntire(short[k] ?: continue) ?: continue
                 if (isolated(k)) found += k to m.groupValues[1].toInt()
             }
             if (found.size >= 3) {
@@ -95,7 +107,7 @@ object Chapters {
         // 같은 꾸밈(- 제목 -, 【제목】, < 제목 >)으로 둘러싼 짧은 줄이 여러 번 나오면 → 장 제목
         val decoCount = HashMap<String, Int>()
         for (k in 0 until n) {
-            val t = paragraphs[k].trim()
+            val t = short[k] ?: continue
             if (t.length in 3..MAX_TITLE && WRAPPED.matches(t) && isolated(k)) {
                 val key = "${t.first()}${t.last()}"
                 decoCount[key] = (decoCount[key] ?: 0) + 1
@@ -104,10 +116,22 @@ object Chapters {
 
         val out = ArrayList<Html.Block>(n)
         var i = 0
+        var found = 0
+        var nextReport = 0
         while (i < n) {
+            if (onProgress != null && i >= nextReport) {
+                onProgress(i, n, found)
+                nextReport = i + 3000
+            }
             val p = paragraphs[i]
-            val t = p.trim()
-            if (t.isNotEmpty() && isSceneBreak(t)) {
+            val t = short[i]
+            if (t == null) {
+                // 빈 줄이나 긴 문단: 제목 아님
+                out += Html.Block.Para(p)
+                i++
+                continue
+            }
+            if (isSceneBreak(t)) {
                 out += Html.Block.Para(t, level = 4)
                 i++
                 continue
@@ -123,13 +147,14 @@ object Chapters {
                 i++
                 continue
             }
-            out += Html.Block.Para(p.trim(), level = 1)
+            out += Html.Block.Para(t, level = 1)
+            found++
             i++
             if (kind == Kind.MARK_ONLY) {
                 // 바로 다음 글줄(빈 줄 하나까지 건너뜀)이 짧은 말이면 부제목
                 var j = i
-                if (j < paragraphs.size && paragraphs[j].isBlank()) j++
-                val next = paragraphs.getOrNull(j)?.trim()
+                if (j < n && blankArr[j]) j++
+                val next = if (j < n) short[j] else null
                 // 부제목은 짧고, 문장이 아니고, 그 뒤가 빈 줄이어야 한다 (본문 첫 줄을 잘못 잡지 않게)
                 if (next != null && next.isNotEmpty() && next.length <= MAX_SUB && blank(j + 1) &&
                     !SENTENCE.containsMatchIn(next) && titleKind(next) == null && !isSceneBreak(next) &&
@@ -140,6 +165,7 @@ object Chapters {
                 }
             }
         }
+        onProgress?.invoke(n, n, found)
         return out
     }
 }

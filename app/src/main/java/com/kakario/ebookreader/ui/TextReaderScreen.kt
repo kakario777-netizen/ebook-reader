@@ -291,7 +291,7 @@ fun TextReaderScreen(
                     Spacer(Modifier.height(4.dp))
                 }
                 if (loadStage.isNotEmpty()) {
-                    Text("$loadStage…", color = Ink, style = MaterialTheme.typography.bodySmall)
+                    Text(if (" (" in loadStage) loadStage.replaceFirst(" (", "… (") else "$loadStage…", color = Ink, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                 }
             }
 
