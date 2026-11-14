@@ -54,8 +54,14 @@ class BookCache private constructor(context: Context) {
                 target.setLastModified(System.currentTimeMillis())
                 return@withLock target
             }
-            if (entry.size > MAX_SINGLE) {
-                throw UserFacingException("파일이 너무 커요 (${entry.size / (1 shl 20)}MB).\n${MAX_SINGLE / (1 shl 20)}MB까지 열 수 있어요.")
+            // 한 파일 한도 = 설정한 '받아둔 책 최대' (무제한이면 없음), 그리고 남은 저장공간
+            val limit = maxBytes
+            if (limit > 0 && entry.size > limit) {
+                throw UserFacingException("파일(${entry.size / (1 shl 20)}MB)이 '받아둔 책 최대'(${limit / (1 shl 20)}MB)보다 커요.\n설정 → 저장공간에서 늘려 주세요.")
+            }
+            val free = dir.usableSpace
+            if (free in 1 until entry.size + (64L shl 20)) {
+                throw UserFacingException("저장공간이 모자라요 (남은 공간 ${free / (1 shl 20)}MB, 필요 ${entry.size / (1 shl 20)}MB).")
             }
             val tmp = File(dir, target.name + ".part")
             ftp().download(entry.path, tmp) { onProgress(it, entry.size) }
@@ -90,7 +96,6 @@ class BookCache private constructor(context: Context) {
     companion object {
         /** 최대 용량 (설정에서 바꿈, 0 이하 = 제한 없음) */
         @Volatile var maxBytes: Long = 800L * 1024 * 1024
-        private const val MAX_SINGLE = 700L * 1024 * 1024
 
         @Volatile private var instance: BookCache? = null
 

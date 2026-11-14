@@ -185,16 +185,17 @@ class TextContent(
          * TXT 원본 → 정리본. 오래 걸리는 부분이라 단계마다 알려준다 (stage 글, 0~1 진행).
          */
         fun prepareTxt(
-            bytes: ByteArray,
+            file: File,
             reflow: Reflow.Mode,
             chapters: Boolean,
             sentencePerLine: Boolean,
             report: (String, Float) -> Unit = { _, _ -> },
         ): Prepared {
             report("글자 읽는 중", 0.02f)
-            val text = TextDecode.decodeText(bytes)
+            val lines = TextDecode.readLines(file)
             report("줄 정리하는 중", 0.06f)
-            val result = Reflow.process(text.split('\n'), reflow) { report("줄 정리하는 중", 0.06f + 0.6f * it) }
+            val result = Reflow.process(lines, reflow) { report("줄 정리하는 중", 0.06f + 0.6f * it) }
+            lines.clear()
             val paras0 = result.paragraphs.map { if (result.reflowed) it else it.trimEnd() }
             report("문장 나누는 중", 0.68f)
             val paras = if (!sentencePerLine) paras0 else paras0.flatMap { p ->

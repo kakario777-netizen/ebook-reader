@@ -190,7 +190,7 @@ fun TextReaderScreen(
                             ?: throw UserFacingException("EPUB을 읽을 수 없어요.\n파일이 손상됐거나 형식이 맞지 않을 수 있어요.")
                     } else {
                         val p = TextContent.prepareTxt(
-                            file.readBytes(), settings.txtReflow, settings.txtChapters, settings.sentencePerLine,
+                            file, settings.txtReflow, settings.txtChapters, settings.sentencePerLine,
                         ) { stage, f ->
                             loadStage = stage
                             loadFrac = base + (1f - base) * f
@@ -219,7 +219,7 @@ fun TextReaderScreen(
         } catch (e: UserFacingException) {
             error = e.message
         } catch (e: OutOfMemoryError) {
-            error = "책이 너무 커서 열 수 없어요."
+            error = "책이 너무 커서 메모리가 모자라요.\n앱을 껐다 켠 뒤 다시 열어 보세요."
         } catch (e: Exception) {
             error = "열 수 없어요: ${e.message ?: e.javaClass.simpleName}"
         } finally {
